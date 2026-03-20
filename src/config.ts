@@ -62,8 +62,9 @@ function loadConfig() {
     },
 
     weather: {
-      latitude: 41.9742,
-      longitude: -87.9073,
+      // Chicago Midway Airport (KMDW) — Kalshi settlement station
+      latitude: 41.7868,
+      longitude: -87.7522,
       models: ['gfs025', 'ecmwf_ifs025'] as const,
       temperatureUnit: 'fahrenheit' as const,
     },

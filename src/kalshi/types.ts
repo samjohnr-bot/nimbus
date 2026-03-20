@@ -1,27 +1,58 @@
-export interface KalshiMarket {
+// Raw API response types (dollar strings as returned by Kalshi)
+export interface KalshiMarketRaw {
   ticker: string;
   event_ticker: string;
-  series_ticker: string;
   title: string;
   subtitle: string;
-  status: 'open' | 'closed' | 'settled';
-  result: 'yes' | 'no' | '' | null;
-  yes_bid: number;
-  yes_ask: number;
-  no_bid: number;
-  no_ask: number;
-  last_price: number;
-  volume: number;
-  open_interest: number;
+  status: string;
+  result: string;
+  strike_type: 'greater' | 'less' | 'between';
+  floor_strike?: number | null;
+  cap_strike?: number | null;
+  yes_bid_dollars: string;
+  yes_ask_dollars: string;
+  no_bid_dollars: string;
+  no_ask_dollars: string;
+  last_price_dollars: string;
+  volume_fp: string;
+  open_interest_fp: string;
   close_time: string;
   expiration_time: string;
-  floor_strike: number | null;
-  cap_strike: number | null;
+  open_time: string;
+  rules_primary: string;
+}
+
+// Normalized types (cents as integers for internal use)
+export interface KalshiMarket {
+  ticker: string;
+  eventTicker: string;
+  title: string;
+  subtitle: string;
+  status: string;
+  result: string;
+  strikeType: 'greater' | 'less' | 'between';
+  floorStrike: number | null;
+  capStrike: number | null;
+  yesBid: number;   // cents
+  yesAsk: number;   // cents
+  noBid: number;    // cents
+  noAsk: number;    // cents
+  lastPrice: number; // cents
+  volume: number;
+  openInterest: number;
+  closeTime: string;
+  expirationTime: string;
+  openTime: string;
+}
+
+export interface KalshiOrderbookEntry {
+  price: number; // cents
+  size: number;
 }
 
 export interface KalshiOrderbook {
-  yes: [number, number][];
-  no: [number, number][];
+  yes: KalshiOrderbookEntry[];
+  no: KalshiOrderbookEntry[];
 }
 
 export interface KalshiOrder {
@@ -72,13 +103,17 @@ export interface CreateOrderParams {
   yes_price: number;
 }
 
+// Raw API response wrappers
 export interface KalshiMarketsResponse {
-  markets: KalshiMarket[];
+  markets: KalshiMarketRaw[];
   cursor: string;
 }
 
-export interface KalshiOrderbookResponse {
-  orderbook: KalshiOrderbook;
+export interface KalshiOrderbookRawResponse {
+  orderbook_fp: {
+    yes_dollars: [string, string][];
+    no_dollars: [string, string][];
+  };
 }
 
 export interface KalshiOrderResponse {

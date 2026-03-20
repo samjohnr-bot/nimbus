@@ -8,27 +8,20 @@ export function buildMarketSnapshot(
   bracket: Bracket,
   orderbook: KalshiOrderbook,
 ): MarketSnapshot {
-  // Orderbook prices are in cents (1-99)
-  const bestBidYes = orderbook.yes.length > 0 ? orderbook.yes[0][0] : 0;
-  const bestAskYes = orderbook.yes.length > 0
-    ? orderbook.yes[orderbook.yes.length - 1][0]
-    : 100;
-  const bestBidNo = orderbook.no.length > 0 ? orderbook.no[0][0] : 0;
-  const bestAskNo = orderbook.no.length > 0
-    ? orderbook.no[orderbook.no.length - 1][0]
-    : 100;
+  // Orderbook entries are { price, size } in cents, sorted ascending by price.
+  // Yes side: people bidding to buy yes contracts.
+  //   Best yes bid = highest price → last entry
+  // No side: people bidding to buy no contracts.
+  //   Best no bid = highest price → last entry
+  //   Ask for yes = 100 - best no bid (buying yes = selling no)
+  //   Ask for no = 100 - best yes bid
 
-  // For Kalshi, orderbook.yes = [[price, size], ...] sorted by price
-  // Best bid = highest price someone will pay for yes
-  // Best ask = lowest price someone will sell yes at
-  const yesBids = orderbook.yes.sort((a, b) => b[0] - a[0]);
-  const noBids = orderbook.no.sort((a, b) => b[0] - a[0]);
+  const yesSorted = [...orderbook.yes].sort((a, b) => a.price - b.price);
+  const noSorted = [...orderbook.no].sort((a, b) => a.price - b.price);
 
-  const topYesBid = yesBids.length > 0 ? yesBids[0][0] : 0;
-  const topNoBid = noBids.length > 0 ? noBids[0][0] : 0;
+  const topYesBid = yesSorted.length > 0 ? yesSorted[yesSorted.length - 1].price : 0;
+  const topNoBid = noSorted.length > 0 ? noSorted[noSorted.length - 1].price : 0;
 
-  // Ask for yes = 100 - best no bid
-  // Ask for no = 100 - best yes bid
   const computedAskYes = topNoBid > 0 ? 100 - topNoBid : 99;
   const computedAskNo = topYesBid > 0 ? 100 - topYesBid : 99;
 

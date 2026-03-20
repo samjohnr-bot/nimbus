@@ -85,7 +85,7 @@ describe('buildDistribution', () => {
   });
 
   it('should handle boundary values correctly', () => {
-    // 78°F exactly should be in B2 (78-80), not B1 (< 78)
+    // 78°F exactly should be in B2 (78-80 inclusive), not B1 (< 78)
     const members = [78];
     const dist = buildDistribution(makeForecast(members), brackets);
 
@@ -93,6 +93,19 @@ describe('buildDistribution', () => {
     const b2 = dist.find(d => d.bracket.ticker === 'B2')!;
 
     expect(b2.modelProb).toBeGreaterThan(b1.modelProb);
+  });
+
+  it('should handle greater bracket with strict > check', () => {
+    // 86°F exactly: the > bracket (lowBound=86, highBound=null) uses temp > 86
+    // So 86°F should NOT be in B6, but 86.1 should
+    const members = [86];
+    const dist = buildDistribution(makeForecast(members), brackets);
+
+    const b5 = dist.find(d => d.bracket.ticker === 'B5')!;
+    const b6 = dist.find(d => d.bracket.ticker === 'B6')!;
+
+    // 86 fits in B5 (84-86 inclusive) but not B6 (> 86)
+    expect(b5.modelProb).toBeGreaterThan(b6.modelProb);
   });
 
   it('should throw on empty ensemble', () => {
@@ -113,12 +126,22 @@ describe('buildDistribution', () => {
 });
 
 describe('parseBracketsFromMarkets', () => {
+  const baseMarket = {
+    eventTicker: 'KXHIGHCHI-26MAR20',
+    title: '',
+    status: 'active',
+    result: '',
+    yesBid: 0, yesAsk: 0, noBid: 0, noAsk: 0, lastPrice: 0,
+    volume: 0, openInterest: 0,
+    closeTime: '', expirationTime: '', openTime: '',
+  };
+
   it('should sort brackets by lowBound ascending', () => {
     const markets = [
-      { ticker: 'B4', floor_strike: 82, cap_strike: 84, subtitle: '' },
-      { ticker: 'B1', floor_strike: null, cap_strike: 78, subtitle: '' },
-      { ticker: 'B6', floor_strike: 86, cap_strike: null, subtitle: '' },
-      { ticker: 'B2', floor_strike: 78, cap_strike: 80, subtitle: '' },
+      { ...baseMarket, ticker: 'B4', strikeType: 'between' as const, floorStrike: 82, capStrike: 84, subtitle: '' },
+      { ...baseMarket, ticker: 'B1', strikeType: 'less' as const, floorStrike: null, capStrike: 78, subtitle: '' },
+      { ...baseMarket, ticker: 'B6', strikeType: 'greater' as const, floorStrike: 86, capStrike: null, subtitle: '' },
+      { ...baseMarket, ticker: 'B2', strikeType: 'between' as const, floorStrike: 78, capStrike: 80, subtitle: '' },
     ];
 
     const parsed = parseBracketsFromMarkets(markets);
@@ -131,21 +154,21 @@ describe('parseBracketsFromMarkets', () => {
 
   it('should generate range labels when subtitle is empty', () => {
     const markets = [
-      { ticker: 'B1', floor_strike: null, cap_strike: 78, subtitle: '' },
-      { ticker: 'B3', floor_strike: 80, cap_strike: 82, subtitle: '' },
-      { ticker: 'B6', floor_strike: 86, cap_strike: null, subtitle: '' },
+      { ...baseMarket, ticker: 'B1', strikeType: 'less' as const, floorStrike: null, capStrike: 78, subtitle: '' },
+      { ...baseMarket, ticker: 'B3', strikeType: 'between' as const, floorStrike: 80, capStrike: 82, subtitle: '' },
+      { ...baseMarket, ticker: 'B6', strikeType: 'greater' as const, floorStrike: 86, capStrike: null, subtitle: '' },
     ];
 
     const parsed = parseBracketsFromMarkets(markets);
 
     expect(parsed[0].rangeLabel).toBe('< 78°F');
     expect(parsed[1].rangeLabel).toBe('80-82°F');
-    expect(parsed[2].rangeLabel).toBe('≥ 86°F');
+    expect(parsed[2].rangeLabel).toBe('> 86°F');
   });
 
   it('should use subtitle when provided', () => {
     const markets = [
-      { ticker: 'B1', floor_strike: null, cap_strike: 78, subtitle: 'Below 78' },
+      { ...baseMarket, ticker: 'B1', strikeType: 'less' as const, floorStrike: null, capStrike: 78, subtitle: 'Below 78' },
     ];
 
     const parsed = parseBracketsFromMarkets(markets);

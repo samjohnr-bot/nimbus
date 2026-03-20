@@ -26,12 +26,11 @@ export async function generateSignals(balance: number): Promise<TradeSignal[]> {
     status: 'open',
   });
 
-  // Filter to tomorrow's markets
+  // Filter to tomorrow's markets by matching the event ticker date
+  // Event tickers look like KXHIGHCHI-26MAR20 for March 20, 2026
   const tomorrowMarkets = markets.filter(m => {
-    // Market tickers contain the date, e.g., KXHIGHCHI-26MAR21-B1
-    // We match by checking if the event resolves on our target date
-    const closeDate = new Date(m.close_time).toISOString().split('T')[0];
-    const expDate = new Date(m.expiration_time).toISOString().split('T')[0];
+    const closeDate = new Date(m.closeTime).toISOString().split('T')[0];
+    const expDate = new Date(m.expirationTime).toISOString().split('T')[0];
     return closeDate === targetDate || expDate === targetDate;
   });
 

@@ -13,8 +13,8 @@ const bracket: Bracket = {
 describe('buildMarketSnapshot', () => {
   it('should compute spread and midpoint from orderbook', () => {
     const orderbook: KalshiOrderbook = {
-      yes: [[60, 10], [55, 20]],  // bids at 60 and 55
-      no: [[35, 15], [30, 25]],   // bids at 35 and 30
+      yes: [{ price: 55, size: 20 }, { price: 60, size: 10 }], // bids at 55 and 60
+      no: [{ price: 30, size: 25 }, { price: 35, size: 15 }],  // bids at 30 and 35
     };
 
     const snapshot = buildMarketSnapshot(bracket, orderbook);
@@ -42,7 +42,7 @@ describe('buildMarketSnapshot', () => {
 
   it('should handle one-sided orderbook', () => {
     const orderbook: KalshiOrderbook = {
-      yes: [[70, 5]],
+      yes: [{ price: 70, size: 5 }],
       no: [],
     };
     const snapshot = buildMarketSnapshot(bracket, orderbook);
@@ -74,14 +74,14 @@ describe('calculateEdge', () => {
       { bracket: { ticker: 'B3', rangeLabel: '', lowBound: 80, highBound: 82 }, modelProb: 0.75 },
     ];
     const snapshots: MarketSnapshot[] = [
-      makeSnapshot('B3', 62, 42, 4), // market ask yes = 62¢ → 0.62 implied
+      makeSnapshot('B3', 62, 42, 4),
     ];
 
     const signals = calculateEdge(modelProbs, snapshots);
 
     const yesSig = signals.find(s => s.side === 'yes');
     expect(yesSig).toBeDefined();
-    expect(yesSig!.edge).toBeCloseTo(0.13, 2); // 0.75 - 0.62
+    expect(yesSig!.edge).toBeCloseTo(0.13, 2);
     expect(yesSig!.price).toBe(62);
   });
 
@@ -90,12 +90,11 @@ describe('calculateEdge', () => {
       { bracket: { ticker: 'B1', rangeLabel: '', lowBound: null, highBound: 78 }, modelProb: 0.05 },
     ];
     const snapshots: MarketSnapshot[] = [
-      makeSnapshot('B1', 20, 84, 4), // ask no = 84¢ → 0.84 for no
+      makeSnapshot('B1', 20, 84, 4),
     ];
 
     const signals = calculateEdge(modelProbs, snapshots);
 
-    // noProb = 1 - 0.05 = 0.95, noEdge = 0.95 - 0.84 = 0.11
     const noSig = signals.find(s => s.side === 'no');
     expect(noSig).toBeDefined();
     expect(noSig!.edge).toBeCloseTo(0.11, 2);
@@ -106,13 +105,10 @@ describe('calculateEdge', () => {
       { bracket: { ticker: 'B3', rangeLabel: '', lowBound: 80, highBound: 82 }, modelProb: 0.50 },
     ];
     const snapshots: MarketSnapshot[] = [
-      makeSnapshot('B3', 52, 52, 4), // ask yes = 52, ask no = 52 → both sides ~0.50
+      makeSnapshot('B3', 52, 52, 4),
     ];
 
     const signals = calculateEdge(modelProbs, snapshots);
-
-    // Model says 0.50, ask yes is 0.52 → negative edge on yes
-    // No prob = 0.50, ask no is 0.52 → negative edge on no
     expect(signals).toHaveLength(0);
   });
 
@@ -122,13 +118,12 @@ describe('calculateEdge', () => {
       { bracket: { ticker: 'B3', rangeLabel: '', lowBound: 80, highBound: 82 }, modelProb: 0.50 },
     ];
     const snapshots: MarketSnapshot[] = [
-      makeSnapshot('B2', 15, 88, 4), // yes edge = 0.30 - 0.15 = 0.15
-      makeSnapshot('B3', 40, 64, 4), // yes edge = 0.50 - 0.40 = 0.10
+      makeSnapshot('B2', 15, 88, 4),
+      makeSnapshot('B3', 40, 64, 4),
     ];
 
     const signals = calculateEdge(modelProbs, snapshots);
 
-    // Should be sorted: B2 yes (0.15) before B3 yes (0.10)
     expect(signals.length).toBeGreaterThan(0);
     for (let i = 1; i < signals.length; i++) {
       expect(signals[i].edge).toBeLessThanOrEqual(signals[i - 1].edge);
