@@ -8,9 +8,21 @@ import { sizePosition } from './sizing.js';
 import { checkTradeAllowed } from './risk.js';
 import type { TradeSignal, MarketSnapshot, BracketProbability } from '../types.js';
 
+export interface RawSignalInfo {
+  bracket: string;
+  range: string;
+  side: string;
+  edge: number;
+  modelProb: number;
+  marketProb: number;
+  spread: number;
+  price: number;
+}
+
 export interface SignalResult {
   signals: TradeSignal[];
   distribution: BracketProbability[];
+  rawSignals: RawSignalInfo[];
 }
 
 const log = createLogger('signals');
@@ -23,7 +35,14 @@ function getTomorrowDate(): string {
 
 export async function generateSignals(balance: number): Promise<SignalResult> {
   const targetDate = getTomorrowDate();
-  log.info({ targetDate, balance }, 'Generating signals');
+
+  // In dry-run mode with $0 balance, use a simulated bankroll so sizing works
+  if (balance === 0 && config.dryRun) {
+    balance = 10000; // $100 simulated bankroll (in cents)
+    log.info({ targetDate, balance, simulated: true }, 'Generating signals (simulated bankroll)');
+  } else {
+    log.info({ targetDate, balance }, 'Generating signals');
+  }
 
   // 1. Fetch bracket markets from Kalshi
   const markets = await kalshi.getMarkets({
@@ -41,7 +60,7 @@ export async function generateSignals(balance: number): Promise<SignalResult> {
 
   if (tomorrowMarkets.length === 0) {
     log.info({ targetDate }, 'No markets found for tomorrow');
-    return { signals: [], distribution: [] };
+    return { signals: [], distribution: [], rawSignals: [] };
   }
 
   log.info({ count: tomorrowMarkets.length, targetDate }, 'Found bracket markets');
@@ -56,7 +75,7 @@ export async function generateSignals(balance: number): Promise<SignalResult> {
   const dataAge = (Date.now() - forecast.modelTimestamp.getTime()) / 1000;
   if (dataAge > config.trading.dataMaxAge) {
     log.warn({ dataAge, maxAge: config.trading.dataMaxAge }, 'Weather data too stale');
-    return { signals: [], distribution: [] };
+    return { signals: [], distribution: [], rawSignals: [] };
   }
 
   // 4. Build probability distribution
@@ -100,5 +119,17 @@ export async function generateSignals(balance: number): Promise<SignalResult> {
     'Signal generation complete',
   );
 
-  return { signals: tradeSignals, distribution };
+  // Build raw signal info for dashboard (all edges, before filtering)
+  const rawSignalInfo: RawSignalInfo[] = rawSignals.map(s => ({
+    bracket: s.bracket.ticker,
+    range: s.bracket.rangeLabel,
+    side: s.side,
+    edge: s.edge,
+    modelProb: s.modelProb,
+    marketProb: s.marketImpliedProb,
+    spread: s.spread,
+    price: s.price,
+  }));
+
+  return { signals: tradeSignals, distribution, rawSignals: rawSignalInfo };
 }

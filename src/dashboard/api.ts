@@ -9,6 +9,7 @@ import type { TradeSignal, BracketProbability } from '../types.js';
 // In-memory state set by the scheduler after each cycle
 let latestSignals: TradeSignal[] = [];
 let latestDistribution: BracketProbability[] = [];
+let latestRawSignals: { bracket: string; range: string; side: string; edge: number; modelProb: number; marketProb: number; spread: number; price: number }[] = [];
 let lastCycleTime: string | null = null;
 let lastCycleId: string | null = null;
 
@@ -18,11 +19,13 @@ export function setLatestCycleData(
   signals: TradeSignal[],
   distribution: BracketProbability[],
   cycleId: string,
+  rawSignals?: { bracket: string; range: string; side: string; edge: number; modelProb: number; marketProb: number; spread: number; price: number }[],
 ) {
   latestSignals = signals;
   latestDistribution = distribution;
   lastCycleTime = new Date().toISOString();
   lastCycleId = cycleId;
+  if (rawSignals) latestRawSignals = rawSignals;
 }
 
 function json(res: ServerResponse, data: unknown, status = 200) {
@@ -110,6 +113,7 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
         range: d.bracket.rangeLabel,
         modelProb: d.modelProb,
       })),
+      rawSignals: latestRawSignals,
     });
     return true;
   }

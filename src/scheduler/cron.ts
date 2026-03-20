@@ -50,10 +50,10 @@ export async function runTradingCycle(): Promise<void> {
     }
 
     // 3. Generate signals
-    const { signals, distribution } = await generateSignals(portfolio.balance);
+    const { signals, distribution, rawSignals } = await generateSignals(portfolio.balance);
 
     // Store for dashboard API
-    setLatestCycleData(signals, distribution, cycleId);
+    setLatestCycleData(signals, distribution, cycleId, rawSignals);
 
     // 4. Execute trades
     const results = await executeSignals(signals);

@@ -101,7 +101,7 @@ export function getDashboardHtml(): string {
         <div id="distribution"></div>
       </div>
       <div class="card">
-        <h2>Current Signals</h2>
+        <h2>Edge Scanner</h2>
         <div id="signals"></div>
       </div>
     </div>
@@ -162,23 +162,26 @@ async function refresh() {
   // Distribution
   if (signals && signals.distribution && signals.distribution.length > 0) {
     const maxProb = Math.max(...signals.distribution.map(d => d.modelProb), 0.01);
-    // Find matching market prices from signals
-    const sigMap = {};
-    (signals.signals || []).forEach(s => { sigMap[s.ticker] = s; });
+    // Build market prob map from raw signals (yes side gives direct market implied prob)
+    const marketMap = {};
+    (signals.rawSignals || []).forEach(s => {
+      if (s.side === 'yes') marketMap[s.bracket] = s.marketProb;
+    });
 
     let html = '';
     signals.distribution.forEach(d => {
       const modelW = (d.modelProb / maxProb * 100).toFixed(0);
-      const sig = sigMap[d.ticker];
-      const marketProb = sig ? sig.marketImpliedProb : 0;
-      const marketW = (marketProb / maxProb * 100).toFixed(0);
+      const marketProb = marketMap[d.ticker] || 0;
+      const adjMax = Math.max(maxProb, marketProb);
+      const modelW2 = (d.modelProb / adjMax * 100).toFixed(0);
+      const marketW = (marketProb / adjMax * 100).toFixed(0);
       html += '<div class="bar-row">' +
         '<div class="bar-label">' + d.range + '</div>' +
         '<div class="bar-track">' +
           '<div class="bar-fill-market" style="width:' + marketW + '%"></div>' +
-          '<div class="bar-fill-model" style="width:' + modelW + '%"></div>' +
+          '<div class="bar-fill-model" style="width:' + modelW2 + '%"></div>' +
         '</div>' +
-        '<div class="bar-value">' + fmtPct(d.modelProb) + '</div>' +
+        '<div class="bar-value">' + fmtPct(d.modelProb) + (marketProb > 0 ? ' / ' + fmtPct(marketProb) : '') + '</div>' +
       '</div>';
     });
     document.getElementById('distribution').innerHTML = html;
@@ -186,17 +189,27 @@ async function refresh() {
     document.getElementById('distribution').innerHTML = '<div class="empty">Waiting for first cycle...</div>';
   }
 
-  // Signals table
-  if (signals && signals.signals && signals.signals.length > 0) {
-    let html = '<table><tr><th>Side</th><th>Bracket</th><th>Edge</th><th>Model</th><th>Market</th><th>Spread</th></tr>';
-    signals.signals.forEach(s => {
+  // Signals table — show ALL raw signals (every edge the bot sees)
+  const rawSigs = signals && signals.rawSignals ? signals.rawSignals : [];
+  const tradeSigs = signals && signals.signals ? signals.signals : [];
+  if (rawSigs.length > 0) {
+    let html = '<table><tr><th>Side</th><th>Bracket</th><th>Edge</th><th>Model</th><th>Market</th><th>Spread</th><th>Status</th></tr>';
+    rawSigs.forEach(s => {
+      const isTraded = tradeSigs.some(t => t.ticker === s.bracket && t.side === s.side);
+      const edgeOk = s.edge >= 0.08;
+      const spreadOk = s.spread <= 8;
+      let status = isTraded ? '<span class="yes">TRADE</span>' : '';
+      if (!edgeOk) status = '<span style="color:#666">low edge</span>';
+      else if (!spreadOk) status = '<span style="color:#666">wide spread</span>';
+      else if (!isTraded) status = '<span style="color:#f59e0b">sized out</span>';
       html += '<tr>' +
         '<td class="' + s.side + '">' + s.side.toUpperCase() + '</td>' +
         '<td>' + s.range + '</td>' +
-        '<td class="edge">' + fmtPct(s.edge) + '</td>' +
+        '<td class="edge" style="color:' + (edgeOk ? '#22c55e' : '#666') + '">' + fmtPct(s.edge) + '</td>' +
         '<td>' + fmtPct(s.modelProb) + '</td>' +
-        '<td>' + fmtPct(s.marketImpliedProb) + '</td>' +
-        '<td>' + s.spread + 'c</td>' +
+        '<td>' + fmtPct(s.marketProb) + '</td>' +
+        '<td style="color:' + (spreadOk ? '#e0e0e8' : '#ef4444') + '">' + s.spread + 'c</td>' +
+        '<td>' + status + '</td>' +
       '</tr>';
     });
     html += '</table>';
