@@ -6,7 +6,16 @@ let privateKey: crypto.KeyObject | null = null;
 
 function getPrivateKey(): crypto.KeyObject {
   if (!privateKey) {
-    const pem = fs.readFileSync(config.kalshi.privateKeyPath, 'utf-8');
+    let pem: string;
+
+    if (config.kalshi.privateKey) {
+      // Base64-encoded PEM from env var (for cloud deployment)
+      pem = Buffer.from(config.kalshi.privateKey, 'base64').toString('utf-8');
+    } else {
+      // PEM file on disk (for local development)
+      pem = fs.readFileSync(config.kalshi.privateKeyPath, 'utf-8');
+    }
+
     privateKey = crypto.createPrivateKey(pem);
   }
   return privateKey;

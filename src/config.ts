@@ -6,6 +6,7 @@ dotenv.config();
 const envSchema = z.object({
   NIMBUS_ENV: z.enum(['demo', 'production']).default('demo'),
   KALSHI_API_KEY: z.string().min(1),
+  KALSHI_PRIVATE_KEY: z.string().optional(),
   KALSHI_PRIVATE_KEY_PATH: z.string().default('./keys/kalshi-demo.pem'),
   NIMBUS_DRY_RUN: z.string().transform(v => v === 'true').default('true'),
   NIMBUS_EDGE_THRESHOLD: z.coerce.number().min(0).max(1).default(0.08),
@@ -45,6 +46,7 @@ function loadConfig() {
 
     kalshi: {
       apiKey: env.KALSHI_API_KEY,
+      privateKey: env.KALSHI_PRIVATE_KEY || null,
       privateKeyPath: env.KALSHI_PRIVATE_KEY_PATH,
       baseUrl,
     },
