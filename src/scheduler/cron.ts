@@ -24,8 +24,12 @@ export async function runTradingCycle(): Promise<void> {
       return;
     }
 
-    // 1. Reconcile portfolio
-    await reconcile();
+    // 1. Reconcile portfolio (non-fatal — auth may fail but signals still work)
+    try {
+      await reconcile();
+    } catch (error) {
+      log.warn({ cycleId, error: String(error) }, 'Portfolio reconciliation failed — continuing with cached state');
+    }
     const portfolio = getPortfolioState();
 
     // 2. Check daily loss limit
