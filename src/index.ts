@@ -50,7 +50,7 @@ async function main(): Promise<void> {
     'Nimbus starting',
   );
 
-  // Verify Kalshi connectivity
+  // Verify Kalshi connectivity (non-fatal — dashboard still works if auth fails)
   try {
     const balance = await kalshi.getBalance();
     log.info(
@@ -58,8 +58,7 @@ async function main(): Promise<void> {
       'Kalshi connection verified',
     );
   } catch (error) {
-    log.fatal({ error: String(error) }, 'Failed to connect to Kalshi API — check credentials');
-    process.exit(1);
+    log.error({ error: String(error) }, 'Failed to connect to Kalshi API — check credentials. Bot will retry on next cycle.');
   }
 
   // Start the scheduler

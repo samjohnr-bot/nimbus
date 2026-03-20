@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import { config } from '../config.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('auth');
 
 let privateKey: crypto.KeyObject | null = null;
 
@@ -9,8 +12,20 @@ function getPrivateKey(): crypto.KeyObject {
     let pem: string;
 
     if (config.kalshi.privateKey) {
-      // Base64-encoded PEM from env var (for cloud deployment)
-      pem = Buffer.from(config.kalshi.privateKey, 'base64').toString('utf-8');
+      const raw = config.kalshi.privateKey;
+
+      if (raw.includes('-----BEGIN')) {
+        // Already PEM format (pasted directly into env var)
+        pem = raw;
+      } else {
+        // Base64-encoded PEM
+        pem = Buffer.from(raw, 'base64').toString('utf-8');
+      }
+
+      // Ensure proper line endings
+      pem = pem.replace(/\\n/g, '\n').trim();
+
+      log.debug({ pemStart: pem.substring(0, 30) }, 'Loaded private key from env var');
     } else {
       // PEM file on disk (for local development)
       pem = fs.readFileSync(config.kalshi.privateKeyPath, 'utf-8');
