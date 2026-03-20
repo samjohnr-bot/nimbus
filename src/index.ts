@@ -1,9 +1,30 @@
+import http from 'node:http';
 import { config } from './config.js';
 import { createLogger } from './utils/logger.js';
 import { startScheduler, runTradingCycle } from './scheduler/cron.js';
 import * as kalshi from './kalshi/client.js';
 
 const log = createLogger('main');
+
+// Health check endpoint for Railway/hosting
+const PORT = parseInt(process.env.PORT || '3000', 10);
+const startedAt = new Date().toISOString();
+
+const server = http.createServer((_req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({
+    status: 'ok',
+    service: 'nimbus',
+    env: config.env,
+    dryRun: config.dryRun,
+    startedAt,
+    uptime: process.uptime(),
+  }));
+});
+
+server.listen(PORT, () => {
+  log.info({ port: PORT }, 'Health check server listening');
+});
 
 async function main(): Promise<void> {
   log.info(
