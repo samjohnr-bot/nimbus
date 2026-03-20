@@ -4,6 +4,7 @@ import path from 'node:path';
 import { config } from '../config.js';
 import { getState as getPortfolioState } from '../trading/portfolio.js';
 import { getRiskState } from '../strategy/risk.js';
+import { getAuthDiagnostics } from '../kalshi/auth.js';
 import type { TradeSignal, BracketProbability } from '../types.js';
 
 // In-memory state set by the scheduler after each cycle
@@ -125,6 +126,19 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
 
   if (url === '/api/trades') {
     json(res, readJsonlFile('trades', 50));
+    return true;
+  }
+
+  if (url === '/api/diagnostics') {
+    const authDiag = getAuthDiagnostics();
+    json(res, {
+      auth: authDiag,
+      env: config.env,
+      dryRun: config.dryRun,
+      baseUrl: config.kalshi.baseUrl,
+      apiKeySet: !!config.kalshi.apiKey,
+      apiKeyPrefix: config.kalshi.apiKey ? config.kalshi.apiKey.substring(0, 8) + '...' : '(none)',
+    });
     return true;
   }
 
