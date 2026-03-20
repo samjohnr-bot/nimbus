@@ -3,27 +3,36 @@ import { config } from './config.js';
 import { createLogger } from './utils/logger.js';
 import { startScheduler, runTradingCycle } from './scheduler/cron.js';
 import * as kalshi from './kalshi/client.js';
+import { handleApiRequest } from './dashboard/api.js';
+import { getDashboardHtml } from './dashboard/page.js';
 
 const log = createLogger('main');
 
-// Health check endpoint for Railway/hosting
+// HTTP server — dashboard + API + health check
 const PORT = parseInt(process.env.PORT || '3000', 10);
-const startedAt = new Date().toISOString();
 
-const server = http.createServer((_req, res) => {
-  res.writeHead(200, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({
-    status: 'ok',
-    service: 'nimbus',
-    env: config.env,
-    dryRun: config.dryRun,
-    startedAt,
-    uptime: process.uptime(),
-  }));
+const server = http.createServer((req, res) => {
+  const url = req.url || '/';
+
+  // API routes
+  if (url.startsWith('/api/')) {
+    if (handleApiRequest(req, res)) return;
+  }
+
+  // Health check
+  if (url === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok', uptime: process.uptime() }));
+    return;
+  }
+
+  // Dashboard
+  res.writeHead(200, { 'Content-Type': 'text/html' });
+  res.end(getDashboardHtml());
 });
 
 server.listen(PORT, () => {
-  log.info({ port: PORT }, 'Health check server listening');
+  log.info({ port: PORT }, 'Dashboard server listening');
 });
 
 async function main(): Promise<void> {

@@ -6,7 +6,12 @@ import { buildDistribution, parseBracketsFromMarkets } from '../weather/distribu
 import { buildMarketSnapshot, calculateEdge } from './edge.js';
 import { sizePosition } from './sizing.js';
 import { checkTradeAllowed } from './risk.js';
-import type { TradeSignal, MarketSnapshot } from '../types.js';
+import type { TradeSignal, MarketSnapshot, BracketProbability } from '../types.js';
+
+export interface SignalResult {
+  signals: TradeSignal[];
+  distribution: BracketProbability[];
+}
 
 const log = createLogger('signals');
 
@@ -16,7 +21,7 @@ function getTomorrowDate(): string {
   return tomorrow.toISOString().split('T')[0];
 }
 
-export async function generateSignals(balance: number): Promise<TradeSignal[]> {
+export async function generateSignals(balance: number): Promise<SignalResult> {
   const targetDate = getTomorrowDate();
   log.info({ targetDate, balance }, 'Generating signals');
 
@@ -36,7 +41,7 @@ export async function generateSignals(balance: number): Promise<TradeSignal[]> {
 
   if (tomorrowMarkets.length === 0) {
     log.info({ targetDate }, 'No markets found for tomorrow');
-    return [];
+    return { signals: [], distribution: [] };
   }
 
   log.info({ count: tomorrowMarkets.length, targetDate }, 'Found bracket markets');
@@ -51,7 +56,7 @@ export async function generateSignals(balance: number): Promise<TradeSignal[]> {
   const dataAge = (Date.now() - forecast.modelTimestamp.getTime()) / 1000;
   if (dataAge > config.trading.dataMaxAge) {
     log.warn({ dataAge, maxAge: config.trading.dataMaxAge }, 'Weather data too stale');
-    return [];
+    return { signals: [], distribution: [] };
   }
 
   // 4. Build probability distribution
@@ -95,5 +100,5 @@ export async function generateSignals(balance: number): Promise<TradeSignal[]> {
     'Signal generation complete',
   );
 
-  return tradeSignals;
+  return { signals: tradeSignals, distribution };
 }

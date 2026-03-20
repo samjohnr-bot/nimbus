@@ -9,6 +9,7 @@ import { isDailyLossBreached, resetDaily, getRiskState } from '../strategy/risk.
 import { getState as getPortfolioState } from '../trading/portfolio.js';
 import { logCycle, logTrade, logPrediction } from '../analytics/tracker.js';
 import { checkSettlements } from '../analytics/settlement.js';
+import { setLatestCycleData } from '../dashboard/api.js';
 
 const log = createLogger('scheduler');
 
@@ -45,7 +46,10 @@ export async function runTradingCycle(): Promise<void> {
     }
 
     // 3. Generate signals
-    const signals = await generateSignals(portfolio.balance);
+    const { signals, distribution } = await generateSignals(portfolio.balance);
+
+    // Store for dashboard API
+    setLatestCycleData(signals, distribution, cycleId);
 
     // 4. Execute trades
     const results = await executeSignals(signals);
