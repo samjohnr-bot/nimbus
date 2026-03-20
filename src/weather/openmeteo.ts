@@ -5,7 +5,7 @@ import type { EnsembleForecast, EnsembleApiResponse } from './types.js';
 
 const log = createLogger('weather');
 
-const ENSEMBLE_URL = 'https://api.open-meteo.com/v1/ensemble';
+const ENSEMBLE_URL = 'https://ensemble-api.open-meteo.com/v1/ensemble';
 
 function buildUrl(model: string, forecastDays: number): string {
   const params = new URLSearchParams({

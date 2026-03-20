@@ -18,10 +18,14 @@ export function buildDistribution(
     throw new Error('Cannot build distribution from empty ensemble');
   }
 
+  // Round members to nearest integer to match NWS reporting
+  // (NWS Daily Climate Reports use whole-degree temperatures)
+  const roundedMembers = members.map(t => Math.round(t));
+
   // Count members in each bracket
   const counts = brackets.map(bracket => {
     let count = 0;
-    for (const temp of members) {
+    for (const temp of roundedMembers) {
       if (fitsInBracket(temp, bracket)) {
         count++;
       }
