@@ -88,12 +88,13 @@ async function attemptOrder(
 
     // If immediately executed, great
     if (order.status === 'executed' || order.remaining_count === 0) {
-      log.info({ orderId: order.order_id }, 'Order filled immediately');
+      const filledContracts = signal.contracts - order.remaining_count;
+      log.info({ orderId: order.order_id, filledContracts }, 'Order filled immediately');
       return {
         signal,
         orderId: order.order_id,
         status: 'filled',
-        filledContracts: signal.contracts,
+        filledContracts,
         filledPrice: price,
         timestamp: new Date(),
       };
@@ -102,12 +103,15 @@ async function attemptOrder(
     const fillStatus = await waitForFill(order.order_id);
 
     if (fillStatus === 'executed') {
-      log.info({ orderId: order.order_id }, 'Order filled');
+      // Re-fetch order to get actual filled count
+      const finalOrder = await kalshi.getOrder(order.order_id);
+      const filledContracts = signal.contracts - finalOrder.remaining_count;
+      log.info({ orderId: order.order_id, filledContracts }, 'Order filled');
       return {
         signal,
         orderId: order.order_id,
         status: 'filled',
-        filledContracts: signal.contracts,
+        filledContracts,
         filledPrice: price,
         timestamp: new Date(),
       };
@@ -151,8 +155,11 @@ export async function executeSignals(signals: TradeSignal[]): Promise<TradeResul
 
     // Try at asking price, then improve by 1 cent up to MAX_RETRIES times
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-      const price = signal.price + attempt; // worsen price by 1c each retry
-      if (price >= 99) break;
+      // For YES buys, increase price to be more aggressive (higher yes price).
+      // For NO buys, decrease price to be more aggressive (lower no price = higher yes price).
+      const priceAdjust = signal.side === 'no' ? -attempt : attempt;
+      const price = signal.price + priceAdjust;
+      if (price >= 99 || price <= 1) break;
 
       result = await attemptOrder(signal, price);
       if (result && result.status === 'filled') break;

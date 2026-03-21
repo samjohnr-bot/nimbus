@@ -263,7 +263,7 @@ export function getPaperState() {
     positionDetails: state.positions,
     settledPnl: state.settledPnl,
     dailyPnl: state.dailyPnl,
-    totalPnl: state.balance - state.startingBalance + state.settledPnl,
+    totalPnl: state.balance - state.startingBalance,
     trades: state.trades,
     wins: state.wins,
     losses: state.losses,

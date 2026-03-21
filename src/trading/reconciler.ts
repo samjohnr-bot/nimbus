@@ -23,8 +23,20 @@ export async function reconcile(): Promise<void> {
       break;
     }
 
-    // For sells, profit = sell_price - cost_basis (simplified: just track fill value)
-    // Actual P&L is computed at settlement; here we track fill activity
+    // Compute P&L impact of each fill:
+    // - Buying = spending money (negative P&L): cost = price * count
+    // - Selling = receiving money (positive P&L): revenue = price * count
+    const fillPrice = fill.side === 'yes' ? fill.yes_price : fill.no_price;
+    const fillValue = fillPrice * fill.count;
+
+    if (fill.action === 'sell') {
+      // Selling a position: we receive money
+      newPnl += fillValue;
+    } else {
+      // Buying a position: we spend money
+      newPnl -= fillValue;
+    }
+
     log.info(
       {
         ticker: fill.ticker,
@@ -32,6 +44,8 @@ export async function reconcile(): Promise<void> {
         action: fill.action,
         count: fill.count,
         yesPrice: fill.yes_price,
+        fillValue,
+        runningPnl: newPnl,
       },
       'New fill detected',
     );

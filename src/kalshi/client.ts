@@ -269,17 +269,16 @@ export async function getFills(params?: {
 // --- Orders (requires auth) ---
 
 export async function createOrder(params: CreateOrderParams): Promise<KalshiOrder> {
-  const data = await withRetryWrapper(
-    () => authedRequest<Record<string, unknown>>('POST', '/portfolio/orders', {
-      ticker: params.ticker,
-      action: params.action,
-      side: params.side,
-      type: params.type,
-      count: params.count,
-      yes_price: params.yes_price,
-    }),
-    'POST /portfolio/orders',
-  );
+  // No retry on order creation — if POST succeeds on Kalshi but response fails,
+  // retrying would create a duplicate order.
+  const data = await authedRequest<Record<string, unknown>>('POST', '/portfolio/orders', {
+    ticker: params.ticker,
+    action: params.action,
+    side: params.side,
+    type: params.type,
+    count: params.count,
+    yes_price: params.yes_price,
+  });
   return normalizeOrder(data.order as Record<string, unknown>);
 }
 
