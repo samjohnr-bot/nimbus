@@ -73,8 +73,8 @@ function loadConfig() {
 
     scheduler: {
       pollIntervalMinutes: env.NIMBUS_POLL_INTERVAL,
-      activeHoursStart: 10,
-      activeHoursEnd: 23,
+      activeHoursStart: 0,
+      activeHoursEnd: 24,
       timezone: 'America/Chicago',
     },
 
