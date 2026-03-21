@@ -67,8 +67,44 @@ function load() {
   }
 }
 
-// Load on startup
+// Load on startup — force reset to clear bad data from partial fill bug
+// TODO: Remove this force-reset after first deploy
+const FORCE_RESET_VERSION = 1;
 load();
+if ((state as unknown as Record<string, unknown>).resetVersion !== FORCE_RESET_VERSION) {
+  state = {
+    balance: config.paperBankroll || 15000,
+    startingBalance: config.paperBankroll || 15000,
+    positions: [],
+    settledPnl: 0,
+    dailyPnl: 0,
+    lastResetDate: new Date().toISOString().split('T')[0],
+    trades: 0,
+    wins: 0,
+    losses: 0,
+  };
+  (state as unknown as Record<string, unknown>).resetVersion = FORCE_RESET_VERSION;
+  save();
+}
+
+/**
+ * Reset paper portfolio to fresh state.
+ */
+export function resetPaperPortfolio(): void {
+  state = {
+    balance: config.paperBankroll || 15000,
+    startingBalance: config.paperBankroll || 15000,
+    positions: [],
+    settledPnl: 0,
+    dailyPnl: 0,
+    lastResetDate: new Date().toISOString().split('T')[0],
+    trades: 0,
+    wins: 0,
+    losses: 0,
+  };
+  save();
+  log.info({ balance: state.balance }, 'Paper portfolio reset');
+}
 
 /**
  * Check if we already have a paper position in a ticker.

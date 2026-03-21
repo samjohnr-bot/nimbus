@@ -5,7 +5,7 @@ import { config } from '../config.js';
 import { getState as getPortfolioState } from '../trading/portfolio.js';
 import { getRiskState } from '../strategy/risk.js';
 import { getAuthDiagnostics } from '../kalshi/auth.js';
-import { getPaperState } from '../paper/portfolio.js';
+import { getPaperState, resetPaperPortfolio } from '../paper/portfolio.js';
 import type { TradeSignal, BracketProbability } from '../types.js';
 
 // In-memory state set by the scheduler after each cycle
@@ -182,6 +182,12 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
       .map(([date, data]) => ({ date, ...data }))
       .sort((a, b) => a.date.localeCompare(b.date));
     json(res, series);
+    return true;
+  }
+
+  if (url === '/api/reset-paper' && req.method === 'POST') {
+    resetPaperPortfolio();
+    json(res, { ok: true, message: 'Paper portfolio reset' });
     return true;
   }
 
