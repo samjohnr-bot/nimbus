@@ -52,18 +52,32 @@ async function attemptOrder(
   }
 
   try {
+    const yesPrice = signal.side === 'yes' ? price : 100 - price;
+    log.info(
+      {
+        ticker: signal.bracket.ticker,
+        side: signal.side,
+        price,
+        yesPrice,
+        contracts: signal.contracts,
+        edge: signal.edge.toFixed(3),
+      },
+      'Placing order',
+    );
+
     const order = await kalshi.createOrder({
       ticker: signal.bracket.ticker,
       action: 'buy',
       side: signal.side,
       type: 'limit',
       count: signal.contracts,
-      yes_price: signal.side === 'yes' ? price : 100 - price,
+      yes_price: yesPrice,
     });
 
     log.info(
       {
         orderId: order.order_id,
+        status: order.status,
         ticker: signal.bracket.ticker,
         side: signal.side,
         price,
@@ -71,6 +85,19 @@ async function attemptOrder(
       },
       'Order placed',
     );
+
+    // If immediately executed, great
+    if (order.status === 'executed' || order.remaining_count === 0) {
+      log.info({ orderId: order.order_id }, 'Order filled immediately');
+      return {
+        signal,
+        orderId: order.order_id,
+        status: 'filled',
+        filledContracts: signal.contracts,
+        filledPrice: price,
+        timestamp: new Date(),
+      };
+    }
 
     const fillStatus = await waitForFill(order.order_id);
 
@@ -86,12 +113,23 @@ async function attemptOrder(
       };
     }
 
-    // Not filled — cancel
-    await kalshi.cancelOrder(order.order_id);
-    log.info({ orderId: order.order_id, fillStatus }, 'Order cancelled (not filled)');
-    return null;
+    // Not filled — cancel and report as resting (not a failure)
+    try {
+      await kalshi.cancelOrder(order.order_id);
+    } catch (cancelErr) {
+      log.warn({ orderId: order.order_id, error: String(cancelErr) }, 'Cancel failed (may already be filled)');
+    }
+    log.info({ orderId: order.order_id, fillStatus }, 'Order cancelled (no fill within timeout)');
+    return {
+      signal,
+      orderId: order.order_id,
+      status: 'cancelled',
+      filledContracts: 0,
+      filledPrice: price,
+      timestamp: new Date(),
+    };
   } catch (error) {
-    log.error({ error: String(error), ticker: signal.bracket.ticker }, 'Order failed');
+    log.error({ error: String(error), ticker: signal.bracket.ticker, side: signal.side, price }, 'Order failed');
     return {
       signal,
       orderId: '',
@@ -115,12 +153,19 @@ export async function executeSignals(signals: TradeSignal[]): Promise<TradeResul
       if (price >= 99) break;
 
       result = await attemptOrder(signal, price);
-      if (result) break;
+      if (result && result.status === 'filled') break;
 
-      log.debug(
-        { ticker: signal.bracket.ticker, attempt, nextPrice: price + 1 },
-        'Retrying at worse price',
-      );
+      // If cancelled (no fill), try again at worse price
+      if (result && result.status === 'cancelled') {
+        log.debug(
+          { ticker: signal.bracket.ticker, attempt, nextPrice: price + 1 },
+          'Retrying at worse price',
+        );
+        continue;
+      }
+
+      // If failed (API error), don't retry
+      if (result && result.status === 'failed') break;
     }
 
     if (result) {
