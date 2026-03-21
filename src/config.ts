@@ -17,6 +17,8 @@ const envSchema = z.object({
   NIMBUS_MAX_SPREAD: z.coerce.number().int().positive().default(80),
   NIMBUS_DATA_MAX_AGE: z.coerce.number().int().positive().default(7200),
   NIMBUS_MIN_TIME_BEFORE_CLOSE: z.coerce.number().int().positive().default(3600),
+  NIMBUS_PAPER_TRADE: z.string().transform(v => v === 'true').default('false'),
+  NIMBUS_PAPER_BANKROLL: z.coerce.number().int().positive().default(15000),
   NIMBUS_RUN_ON_START: z.string().transform(v => v === 'true').default('false'),
   LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
 });
@@ -35,13 +37,19 @@ function loadConfig() {
   const env = parsed.data;
 
   const isDemo = env.NIMBUS_ENV === 'demo';
-  const baseUrl = isDemo
-    ? 'https://demo-api.kalshi.co/trade-api/v2'
-    : 'https://api.elections.kalshi.com/trade-api/v2';
+  const isPaper = env.NIMBUS_PAPER_TRADE;
+  const prodUrl = 'https://api.elections.kalshi.com/trade-api/v2';
+  const demoUrl = 'https://demo-api.kalshi.co/trade-api/v2';
+
+  // For paper trading: use production API for market data (real liquidity)
+  // but keep dryRun=true so no real orders are placed
+  const baseUrl = isPaper ? prodUrl : (isDemo ? demoUrl : prodUrl);
 
   return {
     env: env.NIMBUS_ENV,
-    dryRun: env.NIMBUS_DRY_RUN,
+    dryRun: isPaper ? true : env.NIMBUS_DRY_RUN,
+    paperTrade: isPaper,
+    paperBankroll: env.NIMBUS_PAPER_BANKROLL,
     runOnStart: env.NIMBUS_RUN_ON_START,
 
     kalshi: {

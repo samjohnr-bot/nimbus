@@ -148,7 +148,8 @@ async function refresh() {
   if (status) {
     document.getElementById('badge-env').textContent = status.env.toUpperCase();
     const modeEl = document.getElementById('badge-mode');
-    if (status.dryRun) { modeEl.textContent = 'DRY RUN'; modeEl.className = 'badge badge-dry'; }
+    if (status.paperTrade) { modeEl.textContent = 'PAPER'; modeEl.className = 'badge badge-dry'; }
+    else if (status.dryRun) { modeEl.textContent = 'DRY RUN'; modeEl.className = 'badge badge-dry'; }
     else { modeEl.textContent = 'LIVE'; modeEl.className = 'badge badge-live'; }
 
     document.getElementById('balance').textContent = fmt$(status.balance);

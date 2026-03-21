@@ -75,9 +75,10 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
     json(res, {
       env: config.env,
       dryRun: config.dryRun,
+      paperTrade: config.paperTrade,
       startedAt,
       uptime: process.uptime(),
-      balance: portfolio.balance,
+      balance: config.paperTrade ? (config.paperBankroll || 15000) : portfolio.balance,
       portfolioValue: portfolio.portfolioValue,
       positions: portfolio.positions.size,
       totalExposure: portfolio.totalExposure,

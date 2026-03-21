@@ -36,10 +36,10 @@ function getTomorrowDate(): string {
 export async function generateSignals(balance: number): Promise<SignalResult> {
   const targetDate = getTomorrowDate();
 
-  // In dry-run mode with $0 balance, use a simulated bankroll so sizing works
-  if (balance === 0 && config.dryRun) {
-    balance = 10000; // $100 simulated bankroll (in cents)
-    log.info({ targetDate, balance, simulated: true }, 'Generating signals (simulated bankroll)');
+  // In paper/dry-run mode with $0 balance, use a simulated bankroll so sizing works
+  if (balance === 0 && (config.dryRun || config.paperTrade)) {
+    balance = config.paperBankroll || 15000; // simulated bankroll (in cents)
+    log.info({ targetDate, balance, simulated: true, paper: config.paperTrade }, 'Generating signals (simulated bankroll)');
   } else {
     log.info({ targetDate, balance }, 'Generating signals');
   }
