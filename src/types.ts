@@ -32,6 +32,8 @@ export interface BracketSignal {
 }
 
 export interface TradeSignal extends BracketSignal {
+  cityId: string;
+  seriesTicker: string;
   contracts: number;
   maxCost: number;
   fee: number;

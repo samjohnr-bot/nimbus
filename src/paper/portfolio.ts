@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from '../config.js';
+import { config, CITIES } from '../config.js';
 import { createLogger } from '../utils/logger.js';
 import type { TradeResult } from '../types.js';
 
@@ -258,16 +258,19 @@ export async function checkPaperSettlements(): Promise<void> {
   // Dynamic import to avoid circular deps
   const kalshi = await import('../kalshi/client.js');
 
+  // Get all unique series tickers from CITIES
+  const allSeriesTickers = new Set<string>();
+  for (const city of CITIES) {
+    if (city.high) allSeriesTickers.add(city.high);
+    if (city.low) allSeriesTickers.add(city.low);
+  }
+
   const settledTickers = new Map<string, 'yes' | 'no'>();
 
-  // Check each position's market status
-  const uniqueTickers = [...new Set(state.positions.map(p => p.ticker))];
-
-  for (const ticker of uniqueTickers) {
+  for (const seriesTicker of allSeriesTickers) {
     try {
-      // Fetch the market's current status
       const markets = await kalshi.getMarkets({
-        series_ticker: config.trading.seriesTicker,
+        series_ticker: seriesTicker,
         status: 'settled',
         limit: 50,
       });
@@ -277,9 +280,8 @@ export async function checkPaperSettlements(): Promise<void> {
           settledTickers.set(m.ticker, m.result as 'yes' | 'no');
         }
       }
-      break; // Only need to fetch once
     } catch (error) {
-      log.warn({ ticker, error: String(error) }, 'Failed to check settlement');
+      log.warn({ seriesTicker, error: String(error) }, 'Failed to check settlement for series');
     }
   }
 

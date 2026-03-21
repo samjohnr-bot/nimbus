@@ -7,11 +7,15 @@ const log = createLogger('weather');
 
 const ENSEMBLE_URL = 'https://ensemble-api.open-meteo.com/v1/ensemble';
 
-function buildUrl(model: string, forecastDays: number): string {
+function buildUrl(
+  model: string,
+  forecastDays: number,
+  opts: { latitude: number; longitude: number; variable: string },
+): string {
   const params = new URLSearchParams({
-    latitude: config.weather.latitude.toString(),
-    longitude: config.weather.longitude.toString(),
-    daily: 'temperature_2m_max',
+    latitude: opts.latitude.toString(),
+    longitude: opts.longitude.toString(),
+    daily: opts.variable,
     temperature_unit: config.weather.temperatureUnit,
     models: model,
     forecast_days: forecastDays.toString(),
@@ -19,8 +23,12 @@ function buildUrl(model: string, forecastDays: number): string {
   return `${ENSEMBLE_URL}?${params}`;
 }
 
-async function fetchModel(model: string, forecastDays: number): Promise<number[]> {
-  const url = buildUrl(model, forecastDays);
+async function fetchModel(
+  model: string,
+  forecastDays: number,
+  opts: { latitude: number; longitude: number; variable: string },
+): Promise<number[]> {
+  const url = buildUrl(model, forecastDays, opts);
   log.debug({ model, url }, 'Fetching ensemble forecast');
 
   const response = await fetch(url);
@@ -38,7 +46,7 @@ async function fetchModel(model: string, forecastDays: number): Promise<number[]
 
   for (const [key, values] of Object.entries(daily)) {
     if (key === 'time') continue;
-    if (!key.startsWith('temperature_2m_max')) continue;
+    if (!key.startsWith(opts.variable)) continue;
 
     // values is an array with one entry per forecast day
     // We want tomorrow (index 1) if forecastDays >= 2
@@ -53,7 +61,14 @@ async function fetchModel(model: string, forecastDays: number): Promise<number[]
   return members;
 }
 
-export async function getEnsembleForecast(targetDate: string): Promise<EnsembleForecast> {
+export async function getEnsembleForecast(
+  targetDate: string,
+  opts: { latitude: number; longitude: number; variable?: 'temperature_2m_max' | 'temperature_2m_min' } = {
+    latitude: config.weather.latitude,
+    longitude: config.weather.longitude,
+  },
+): Promise<EnsembleForecast> {
+  const variable = opts.variable ?? 'temperature_2m_max';
   const today = new Date();
   const target = new Date(targetDate + 'T00:00:00');
   const daysAhead = Math.ceil((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -64,7 +79,7 @@ export async function getEnsembleForecast(targetDate: string): Promise<EnsembleF
 
   for (const model of models) {
     const members = await withRetry(
-      () => fetchModel(model, forecastDays),
+      () => fetchModel(model, forecastDays, { latitude: opts.latitude, longitude: opts.longitude, variable }),
       `open-meteo-${model}`,
       { maxRetries: 2 },
     );

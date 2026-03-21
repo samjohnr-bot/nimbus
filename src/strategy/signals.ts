@@ -8,6 +8,14 @@ import { sizePosition } from './sizing.js';
 import { checkTradeAllowed } from './risk.js';
 import type { TradeSignal, MarketSnapshot, BracketProbability } from '../types.js';
 
+export interface SignalRequest {
+  cityId: string;
+  seriesTicker: string;
+  latitude: number;
+  longitude: number;
+  variable: 'temperature_2m_max' | 'temperature_2m_min';
+}
+
 export interface RawSignalInfo {
   bracket: string;
   range: string;
@@ -33,20 +41,27 @@ function getTomorrowDate(): string {
   return tomorrow.toISOString().split('T')[0];
 }
 
-export async function generateSignals(balance: number): Promise<SignalResult> {
+export async function generateSignals(balance: number, request?: SignalRequest): Promise<SignalResult> {
   const targetDate = getTomorrowDate();
+
+  // Resolve city-specific values: use request if provided, otherwise fall back to config
+  const seriesTicker = request?.seriesTicker ?? config.trading.seriesTicker;
+  const cityId = request?.cityId ?? config.trading.city;
+  const weatherOpts = request
+    ? { latitude: request.latitude, longitude: request.longitude, variable: request.variable }
+    : { latitude: config.weather.latitude, longitude: config.weather.longitude, variable: 'temperature_2m_max' as const };
 
   // In paper/dry-run mode with $0 balance, use a simulated bankroll so sizing works
   if (balance === 0 && (config.dryRun || config.paperTrade)) {
     balance = config.paperBankroll || 15000; // simulated bankroll (in cents)
-    log.info({ targetDate, balance, simulated: true, paper: config.paperTrade }, 'Generating signals (simulated bankroll)');
+    log.info({ targetDate, balance, simulated: true, paper: config.paperTrade, cityId }, 'Generating signals (simulated bankroll)');
   } else {
-    log.info({ targetDate, balance }, 'Generating signals');
+    log.info({ targetDate, balance, cityId }, 'Generating signals');
   }
 
   // 1. Fetch bracket markets from Kalshi
   const markets = await kalshi.getMarkets({
-    series_ticker: config.trading.seriesTicker,
+    series_ticker: seriesTicker,
     status: 'open',
   });
 
@@ -69,7 +84,7 @@ export async function generateSignals(balance: number): Promise<SignalResult> {
   const brackets = parseBracketsFromMarkets(tomorrowMarkets);
 
   // 3. Fetch ensemble forecast
-  const forecast = await getEnsembleForecast(targetDate);
+  const forecast = await getEnsembleForecast(targetDate, weatherOpts);
 
   // Check data freshness
   const dataAge = (Date.now() - forecast.modelTimestamp.getTime()) / 1000;
@@ -107,7 +122,7 @@ export async function generateSignals(balance: number): Promise<SignalResult> {
       continue;
     }
 
-    tradeSignals.push(sized);
+    tradeSignals.push({ ...sized, cityId, seriesTicker });
   }
 
   log.info(

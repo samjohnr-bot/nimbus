@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from '../config.js';
+import { config, CITIES } from '../config.js';
 import { getState as getPortfolioState } from '../trading/portfolio.js';
 import { getRiskState } from '../strategy/risk.js';
 import { getAuthDiagnostics } from '../kalshi/auth.js';
@@ -90,8 +90,8 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
       paperTrades: paper?.trades,
       lastCycleTime,
       lastCycleId,
-      city: config.trading.city,
-      series: config.trading.seriesTicker,
+      cities: CITIES.length,
+      activeSeries: CITIES.reduce((n, c) => n + (c.high ? 1 : 0) + (c.low ? 1 : 0), 0),
       edgeThreshold: config.trading.edgeThreshold,
       pollInterval: config.scheduler.pollIntervalMinutes,
     });

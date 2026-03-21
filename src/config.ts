@@ -86,12 +86,41 @@ function loadConfig() {
       timezone: 'America/Chicago',
     },
 
+    portfolio: {
+      maxExposurePerCity: 0.15,    // no more than 15% of bankroll in any one city
+      maxContractsPerStrike: 300,  // avoid moving the market
+    },
+
     logging: {
       level: env.LOG_LEVEL,
       directory: './data/logs',
     },
   } as const;
 }
+
+export interface CityConfig {
+  id: string;           // e.g. 'CHI'
+  name: string;         // e.g. 'Chicago'
+  latitude: number;
+  longitude: number;
+  high?: string;        // HIGH series ticker, e.g. 'KXHIGHCHI'
+  low?: string;         // LOW series ticker, e.g. 'KXLOWTCHI'
+}
+
+export const CITIES: CityConfig[] = [
+  { id: 'LAX', name: 'Los Angeles', latitude: 34.05, longitude: -118.24, high: 'KXHIGHLAX', low: 'KXLOWTLAX' },
+  { id: 'MIA', name: 'Miami', latitude: 25.76, longitude: -80.19, high: 'KXHIGHMIA', low: 'KXLOWTMIA' },
+  { id: 'NYC', name: 'New York', latitude: 40.71, longitude: -74.01, high: 'KXHIGHNY', low: 'KXLOWTNYC' },
+  { id: 'CHI', name: 'Chicago', latitude: 41.88, longitude: -87.63, high: 'KXHIGHCHI', low: 'KXLOWTCHI' },
+  { id: 'AUS', name: 'Austin', latitude: 30.27, longitude: -97.74, high: 'KXHIGHAUS', low: 'KXLOWTAUS' },
+  { id: 'MIN', name: 'Minneapolis', latitude: 44.98, longitude: -93.27, high: 'KXHIGHTMIN' },
+  { id: 'DEN', name: 'Denver', latitude: 39.74, longitude: -104.99, high: 'KXHIGHDEN', low: 'KXLOWTDEN' },
+  { id: 'DAL', name: 'Dallas', latitude: 32.78, longitude: -96.80, high: 'KXHIGHTDAL' },
+  { id: 'PHX', name: 'Phoenix', latitude: 33.45, longitude: -112.07, high: 'KXHIGHTPHX' },
+  { id: 'BOS', name: 'Boston', latitude: 42.36, longitude: -71.06, high: 'KXHIGHTBOS' },
+  { id: 'SFO', name: 'San Francisco', latitude: 37.77, longitude: -122.42, high: 'KXHIGHTSFO' },
+  { id: 'PHI', name: 'Philadelphia', latitude: 39.95, longitude: -75.17, high: 'KXHIGHPHIL', low: 'KXLOWTPHIL' },
+];
 
 export type Config = ReturnType<typeof loadConfig>;
 export const config = loadConfig();

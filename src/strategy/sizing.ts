@@ -13,6 +13,8 @@ export function calculateFee(priceInCents: number, contracts: number): number {
 export function sizePosition(
   signal: BracketSignal,
   availableBankroll: number,
+  cityId: string = config.trading.city,
+  seriesTicker: string = config.trading.seriesTicker,
 ): TradeSignal | null {
   const { edge, price, modelProb } = signal;
   const priceInDollars = price / 100;
@@ -63,6 +65,8 @@ export function sizePosition(
 
   return {
     ...signal,
+    cityId,
+    seriesTicker,
     contracts,
     maxCost,
     fee,

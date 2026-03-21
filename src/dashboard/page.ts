@@ -84,6 +84,10 @@ export function getDashboardHtml(): string {
       <div class="stat-label">Positions</div>
     </div>
     <div class="stat">
+      <div class="stat-value" id="city-count">—</div>
+      <div class="stat-label">Cities</div>
+    </div>
+    <div class="stat">
       <div class="stat-value" id="last-cycle">—</div>
       <div class="stat-label">Last Cycle</div>
     </div>
@@ -164,6 +168,7 @@ async function refresh() {
     pnlEl.className = 'stat-value ' + (status.dailyPnl >= 0 ? 'stat-pos' : 'stat-neg');
     document.getElementById('position-count').textContent = status.positions;
     document.getElementById('last-cycle').textContent = timeAgo(status.lastCycleTime);
+    document.getElementById('city-count').textContent = status.cities || '—';
   }
 
   // Distribution
@@ -200,7 +205,9 @@ async function refresh() {
   const rawSigs = signals && signals.rawSignals ? signals.rawSignals : [];
   const tradeSigs = signals && signals.signals ? signals.signals : [];
   if (rawSigs.length > 0) {
-    let html = '<table><tr><th>Side</th><th>Bracket</th><th>Edge</th><th>Model</th><th>Market</th><th>Spread</th><th>Status</th></tr>';
+    // Sort by edge descending so best opportunities are at top
+    rawSigs.sort(function(a, b) { return b.edge - a.edge; });
+    let html = '<table><tr><th>City</th><th>Side</th><th>Range</th><th>Edge</th><th>Model</th><th>Market</th><th>Spread</th><th>Status</th></tr>';
     rawSigs.forEach(s => {
       const isTraded = tradeSigs.some(t => t.ticker === s.bracket && t.side === s.side);
       const edgeOk = s.edge >= 0.08;
@@ -209,7 +216,11 @@ async function refresh() {
       if (!edgeOk) status = '<span style="color:#666">low edge</span>';
       else if (!spreadOk) status = '<span style="color:#666">wide spread</span>';
       else if (!isTraded) status = '<span style="color:#f59e0b">sized out</span>';
+      // Extract city from ticker (e.g. KXHIGHCHI-26MAR21-B65 → CHI)
+      var city = (s.bracket || '').replace(/^KX(HIGH|LOW)T?/, '').split('-')[0] || '?';
+      var type = (s.bracket || '').indexOf('LOW') >= 0 ? 'L' : 'H';
       html += '<tr>' +
+        '<td style="color:#8888a0;font-size:11px">' + city + ' ' + type + '</td>' +
         '<td class="' + s.side + '">' + s.side.toUpperCase() + '</td>' +
         '<td>' + s.range + '</td>' +
         '<td class="edge" style="color:' + (edgeOk ? '#22c55e' : '#666') + '">' + fmtPct(s.edge) + '</td>' +

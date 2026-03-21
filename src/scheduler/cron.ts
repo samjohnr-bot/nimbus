@@ -1,22 +1,24 @@
 import { Cron } from 'croner';
-import { config } from '../config.js';
+import { config, CITIES } from '../config.js';
 import { createLogger } from '../utils/logger.js';
 import { isWithinActiveHours, generateCycleId, getTomorrowDateString } from '../utils/time.js';
 import { reconcile } from '../trading/reconciler.js';
-import { generateSignals } from '../strategy/signals.js';
+import { generateSignals, type SignalRequest } from '../strategy/signals.js';
 import { executeSignals } from '../trading/executor.js';
-import { isDailyLossBreached, resetDaily, getRiskState } from '../strategy/risk.js';
+import { isDailyLossBreached, resetDaily, getRiskState, filterPortfolioRisk } from '../strategy/risk.js';
 import { getState as getPortfolioState } from '../trading/portfolio.js';
 import { logCycle, logTrade, logPrediction } from '../analytics/tracker.js';
 import { checkSettlements } from '../analytics/settlement.js';
 import { setLatestCycleData } from '../dashboard/api.js';
 import { recordPaperTrades, checkPaperSettlements, getPaperState } from '../paper/portfolio.js';
+import type { TradeSignal, BracketProbability } from '../types.js';
+import type { RawSignalInfo } from '../strategy/signals.js';
 
 const log = createLogger('scheduler');
 
 export async function runTradingCycle(): Promise<void> {
   const cycleId = generateCycleId();
-  log.info({ cycleId }, 'Trading cycle started');
+  log.info({ cycleId, cities: CITIES.length }, 'Trading cycle started');
 
   try {
     // Guard: active hours
@@ -50,50 +52,101 @@ export async function runTradingCycle(): Promise<void> {
       return;
     }
 
-    // 3. Generate signals
-    const { signals, distribution, rawSignals } = await generateSignals(portfolio.balance);
+    // Use paper balance when in paper mode
+    const paperState = config.paperTrade ? getPaperState() : null;
+    const balance = paperState ? paperState.balance : portfolio.balance;
 
-    // Store for dashboard API
-    setLatestCycleData(signals, distribution, cycleId, rawSignals);
+    // 3. Build signal requests from all cities
+    const requests: SignalRequest[] = [];
+    for (const city of CITIES) {
+      if (city.high) {
+        requests.push({
+          cityId: city.id,
+          seriesTicker: city.high,
+          latitude: city.latitude,
+          longitude: city.longitude,
+          variable: 'temperature_2m_max',
+        });
+      }
+      if (city.low) {
+        requests.push({
+          cityId: city.id,
+          seriesTicker: city.low,
+          latitude: city.latitude,
+          longitude: city.longitude,
+          variable: 'temperature_2m_min',
+        });
+      }
+    }
 
-    // 4. Execute trades
-    const results = await executeSignals(signals);
+    log.info({ cycleId, requests: requests.length }, 'Signal requests built for all cities');
 
-    // 5. Log results
+    // 4. Fetch signals for all cities (batched, concurrency limit of 3)
+    const allSignals: TradeSignal[] = [];
+    const allDistributions: BracketProbability[] = [];
+    const allRawSignals: RawSignalInfo[] = [];
+
+    for (let i = 0; i < requests.length; i += 3) {
+      const batch = requests.slice(i, i + 3);
+      const results = await Promise.allSettled(
+        batch.map(req => generateSignals(balance, req)),
+      );
+      for (const result of results) {
+        if (result.status === 'fulfilled') {
+          allSignals.push(...result.value.signals);
+          allDistributions.push(...result.value.distribution);
+          allRawSignals.push(...result.value.rawSignals);
+        } else {
+          log.warn({ error: String(result.reason) }, 'Signal generation failed for city');
+        }
+      }
+    }
+
+    // 5. Apply portfolio-level risk filter
+    const approvedSignals = filterPortfolioRisk(allSignals, balance);
+
+    // Store for dashboard API (all approved signals + all distributions)
+    setLatestCycleData(approvedSignals, allDistributions, cycleId, allRawSignals);
+
+    // 6. Execute approved signals
+    const results = await executeSignals(approvedSignals);
+
+    // 7. Log results
     for (const result of results) {
       logTrade(cycleId, result);
     }
 
-    // 5b. Track paper trades if in paper mode
+    // 7b. Track paper trades if in paper mode
     if (config.paperTrade) {
       recordPaperTrades(results);
     }
 
     const filled = results.filter(r => r.status === 'filled').length;
 
-    // Use paper state for balance/positions if in paper mode
-    const paperState = config.paperTrade ? getPaperState() : null;
+    // Re-fetch paper state after recording trades
+    const updatedPaperState = config.paperTrade ? getPaperState() : null;
 
     logCycle({
       cycleId,
       timestamp: new Date(),
       date: getTomorrowDateString(),
-      balance: paperState ? paperState.balance : portfolio.balance,
-      positions: paperState ? paperState.positions : portfolio.positions.size,
-      signalsGenerated: signals.length,
+      balance: updatedPaperState ? updatedPaperState.balance : portfolio.balance,
+      positions: updatedPaperState ? updatedPaperState.positions : portfolio.positions.size,
+      signalsGenerated: allSignals.length,
       tradesAttempted: results.length,
       tradesFilled: filled,
-      dailyPnl: paperState ? paperState.dailyPnl : getRiskState().dailyPnl,
+      dailyPnl: updatedPaperState ? updatedPaperState.dailyPnl : getRiskState().dailyPnl,
     });
 
     log.info(
       {
         cycleId,
-        signals: signals.length,
+        totalSignals: allSignals.length,
+        approved: approvedSignals.length,
         traded: results.length,
         filled,
-        balance: paperState ? paperState.balance : portfolio.balance,
-        paperPnl: paperState?.totalPnl,
+        balance: updatedPaperState ? updatedPaperState.balance : portfolio.balance,
+        paperPnl: updatedPaperState?.totalPnl,
       },
       'Trading cycle complete',
     );
