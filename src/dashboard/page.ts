@@ -141,6 +141,7 @@ async function fetchJson(url) {
 }
 
 async function refresh() {
+  try {
   const [status, signals, trades, pnl, positions] = await Promise.all([
     fetchJson('/api/status'),
     fetchJson('/api/signals'),
@@ -151,7 +152,7 @@ async function refresh() {
 
   // Status bar
   if (status) {
-    document.getElementById('badge-env').textContent = status.env.toUpperCase();
+    document.getElementById('badge-env').textContent = (status.env || '').toUpperCase();
     const modeEl = document.getElementById('badge-mode');
     if (status.paperTrade) { modeEl.textContent = 'PAPER'; modeEl.className = 'badge badge-dry'; }
     else if (status.dryRun) { modeEl.textContent = 'DRY RUN'; modeEl.className = 'badge badge-dry'; }
@@ -225,7 +226,8 @@ async function refresh() {
   }
 
   // Open Positions
-  if (positions && positions.length > 0) {
+  const posArr = Array.isArray(positions) ? positions : [];
+  if (posArr.length > 0) {
     // Find model's top bracket to determine in/out of money
     const dist = signals?.distribution || [];
     const topBracket = dist.length > 0
@@ -233,9 +235,9 @@ async function refresh() {
       : null;
 
     let html = '<table><tr><th>Bracket</th><th>Side</th><th>Qty</th><th>Cost</th><th>If Win</th><th>Outlook</th></tr>';
-    positions.forEach(p => {
-      const maxPayout = p.contracts * 100;
-      const potentialPnl = maxPayout - p.totalCost;
+    posArr.forEach(p => {
+      const maxPayout = (p.contracts || 0) * 100;
+      const potentialPnl = maxPayout - (p.totalCost || 0);
 
       // Determine outlook based on model probability
       let outlook = '—';
@@ -264,8 +266,8 @@ async function refresh() {
     });
 
     // Add summary row
-    const totalCost = positions.reduce((s, p) => s + p.totalCost, 0);
-    const bestCase = positions.reduce((s, p) => s + (p.contracts * 100 - p.totalCost), 0);
+    const totalCost = posArr.reduce((s, p) => s + (p.totalCost || 0), 0);
+    const bestCase = posArr.reduce((s, p) => s + ((p.contracts || 0) * 100 - (p.totalCost || 0)), 0);
     html += '<tr style="border-top:2px solid #2a2a4e;font-weight:600">' +
       '<td colspan="3">Total exposure</td>' +
       '<td>' + fmt$(totalCost) + '</td>' +
@@ -316,6 +318,10 @@ async function refresh() {
   }
 
   document.getElementById('refresh-info').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    console.error('Dashboard refresh error:', e);
+    document.getElementById('refresh-info').textContent = 'Error: ' + e.message;
+  }
 }
 
 refresh();
