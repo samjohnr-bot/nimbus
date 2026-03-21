@@ -110,6 +110,10 @@ export function getDashboardHtml(): string {
         <h2>Daily P&L</h2>
         <div id="pnl-chart" class="pnl-chart"></div>
       </div>
+      <div class="card" style="margin-bottom: 20px;">
+        <h2>Open Positions</h2>
+        <div id="positions"></div>
+      </div>
       <div class="card">
         <h2>Trade History</h2>
         <div id="trades"></div>
@@ -137,11 +141,12 @@ async function fetchJson(url) {
 }
 
 async function refresh() {
-  const [status, signals, trades, pnl] = await Promise.all([
+  const [status, signals, trades, pnl, positions] = await Promise.all([
     fetchJson('/api/status'),
     fetchJson('/api/signals'),
     fetchJson('/api/trades'),
     fetchJson('/api/pnl'),
+    fetchJson('/api/positions'),
   ]);
 
   // Status bar
@@ -217,6 +222,27 @@ async function refresh() {
     document.getElementById('signals').innerHTML = html;
   } else {
     document.getElementById('signals').innerHTML = '<div class="empty">No signals yet</div>';
+  }
+
+  // Open Positions
+  if (positions && positions.length > 0) {
+    let html = '<table><tr><th>Bracket</th><th>Side</th><th>Qty</th><th>Avg Price</th><th>Cost</th><th>Max Payout</th></tr>';
+    positions.forEach(p => {
+      const maxPayout = p.contracts * 100;
+      const potentialPnl = maxPayout - p.totalCost;
+      html += '<tr>' +
+        '<td>' + (p.rangeLabel || p.ticker.split('-').pop()) + '</td>' +
+        '<td class="' + p.side + '">' + (p.side || '').toUpperCase() + '</td>' +
+        '<td>' + p.contracts + '</td>' +
+        '<td>' + p.avgPrice + 'c</td>' +
+        '<td>' + fmt$(p.totalCost) + '</td>' +
+        '<td class="stat-pos">' + fmt$(maxPayout) + ' (' + (potentialPnl > 0 ? '+' : '') + fmt$(potentialPnl) + ')</td>' +
+      '</tr>';
+    });
+    html += '</table>';
+    document.getElementById('positions').innerHTML = html;
+  } else {
+    document.getElementById('positions').innerHTML = '<div class="empty">No open positions</div>';
   }
 
   // Trades table

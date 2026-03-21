@@ -135,6 +135,22 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
     return true;
   }
 
+  if (url === '/api/positions') {
+    const paper = config.paperTrade ? getPaperState() : null;
+    if (paper) {
+      json(res, paper.positionDetails);
+    } else {
+      // For live mode, return positions from portfolio state
+      const portfolio = getPortfolioState();
+      const positions = Array.from(portfolio.positions.entries()).map(([ticker, exposure]) => ({
+        ticker,
+        exposure,
+      }));
+      json(res, positions);
+    }
+    return true;
+  }
+
   if (url === '/api/diagnostics') {
     const authDiag = getAuthDiagnostics();
     json(res, {
