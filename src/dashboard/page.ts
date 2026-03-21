@@ -265,15 +265,47 @@ async function refresh() {
       '</tr>';
     });
 
-    // Add summary row
-    const totalCost = posArr.reduce((s, p) => s + (p.totalCost || 0), 0);
-    const bestCase = posArr.reduce((s, p) => s + ((p.contracts || 0) * 100 - (p.totalCost || 0)), 0);
-    html += '<tr style="border-top:2px solid #2a2a4e;font-weight:600">' +
-      '<td colspan="3">Total exposure</td>' +
-      '<td>' + fmt$(totalCost) + '</td>' +
-      '<td class="stat-pos">+' + fmt$(bestCase) + ' max</td>' +
-      '<td></td></tr>';
+    html += '</table>';
 
+    // Scenario-based P&L — only one bracket can win
+    // Collect unique bracket labels from positions
+    const bracketLabels = new Set();
+    posArr.forEach(p => bracketLabels.add(p.rangeLabel || p.ticker));
+
+    // Also get all bracket labels from distribution for complete scenarios
+    const allBrackets = new Set(bracketLabels);
+    if (dist.length > 0) {
+      dist.forEach(d => allBrackets.add(d.range));
+    }
+
+    // Calculate P&L for each scenario (which bracket actually wins)
+    const scenarios = [];
+    const totalCost = posArr.reduce((s, p) => s + (p.totalCost || 0), 0);
+
+    allBrackets.forEach(function(winningBracket) {
+      let pnl = 0;
+      posArr.forEach(function(p) {
+        const label = p.rangeLabel || p.ticker;
+        const bracketWins = (label === winningBracket);
+        // YES side wins if bracket wins, NO side wins if bracket loses
+        const posWins = (p.side === 'yes' && bracketWins) || (p.side === 'no' && !bracketWins);
+        const payout = posWins ? (p.contracts || 0) * 100 : 0;
+        pnl += payout - (p.totalCost || 0);
+      });
+      scenarios.push({ bracket: winningBracket, pnl: pnl });
+    });
+
+    // Sort by P&L descending
+    scenarios.sort(function(a, b) { return b.pnl - a.pnl; });
+
+    html += '<div style="margin-top:12px;font-size:12px;color:#8888a0;font-weight:600">Scenarios (only 1 bracket wins)</div>';
+    html += '<table style="margin-top:4px"><tr><th>If winner is...</th><th>Net P&L</th></tr>';
+    scenarios.forEach(function(sc) {
+      const cls = sc.pnl >= 0 ? 'stat-pos' : 'stat-neg';
+      const sign = sc.pnl >= 0 ? '+' : '';
+      html += '<tr><td>' + sc.bracket + '</td><td class="' + cls + '">' + sign + fmt$(sc.pnl) + '</td></tr>';
+    });
+    html += '<tr style="border-top:2px solid #2a2a4e;font-weight:600"><td>Total at risk</td><td>' + fmt$(totalCost) + '</td></tr>';
     html += '</table>';
     html += '<div style="font-size:11px;color:#505070;margin-top:8px">Settles after tomorrow\\\'s high temp is recorded (~7 AM CT day after)</div>';
     document.getElementById('positions-table').innerHTML = html;
