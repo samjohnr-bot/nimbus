@@ -226,20 +226,54 @@ async function refresh() {
 
   // Open Positions
   if (positions && positions.length > 0) {
-    let html = '<table><tr><th>Bracket</th><th>Side</th><th>Qty</th><th>Avg Price</th><th>Cost</th><th>Max Payout</th></tr>';
+    // Find model's top bracket to determine in/out of money
+    const dist = signals?.distribution || [];
+    const topBracket = dist.length > 0
+      ? dist.reduce((a, b) => a.modelProb > b.modelProb ? a : b)
+      : null;
+
+    let html = '<table><tr><th>Bracket</th><th>Side</th><th>Qty</th><th>Cost</th><th>If Win</th><th>Outlook</th></tr>';
     positions.forEach(p => {
       const maxPayout = p.contracts * 100;
       const potentialPnl = maxPayout - p.totalCost;
+
+      // Determine outlook based on model probability
+      let outlook = '—';
+      let outlookClass = '';
+      if (dist.length > 0) {
+        const matchingDist = dist.find(d => d.ticker === p.ticker);
+        if (matchingDist) {
+          const modelProb = matchingDist.modelProb;
+          // For YES bets: high model prob = good. For NO bets: low model prob = good
+          const effectiveProb = p.side === 'yes' ? modelProb : (1 - modelProb);
+          if (effectiveProb > 0.4) { outlook = 'Favored'; outlookClass = 'stat-pos'; }
+          else if (effectiveProb > 0.15) { outlook = 'Possible'; outlookClass = ''; }
+          else { outlook = 'Unlikely'; outlookClass = 'stat-neg'; }
+          outlook += ' (' + Math.round(effectiveProb * 100) + '%)';
+        }
+      }
+
       html += '<tr>' +
         '<td>' + (p.rangeLabel || p.ticker.split('-').pop()) + '</td>' +
         '<td class="' + p.side + '">' + (p.side || '').toUpperCase() + '</td>' +
         '<td>' + p.contracts + '</td>' +
-        '<td>' + p.avgPrice + 'c</td>' +
         '<td>' + fmt$(p.totalCost) + '</td>' +
-        '<td class="stat-pos">' + fmt$(maxPayout) + ' (' + (potentialPnl > 0 ? '+' : '') + fmt$(potentialPnl) + ')</td>' +
+        '<td class="stat-pos">+' + fmt$(potentialPnl) + '</td>' +
+        '<td class="' + outlookClass + '">' + outlook + '</td>' +
       '</tr>';
     });
+
+    // Add summary row
+    const totalCost = positions.reduce((s, p) => s + p.totalCost, 0);
+    const bestCase = positions.reduce((s, p) => s + (p.contracts * 100 - p.totalCost), 0);
+    html += '<tr style="border-top:2px solid #2a2a4e;font-weight:600">' +
+      '<td colspan="3">Total exposure</td>' +
+      '<td>' + fmt$(totalCost) + '</td>' +
+      '<td class="stat-pos">+' + fmt$(bestCase) + ' max</td>' +
+      '<td></td></tr>';
+
     html += '</table>';
+    html += '<div style="font-size:11px;color:#505070;margin-top:8px">Settles after tomorrow\'s high temp is recorded (~7 AM CT day after)</div>';
     document.getElementById('positions-table').innerHTML = html;
   } else {
     document.getElementById('positions-table').innerHTML = '<div class="empty">No open positions</div>';
