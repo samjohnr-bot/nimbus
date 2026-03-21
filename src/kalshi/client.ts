@@ -26,6 +26,39 @@ function dollarsToCents(dollars: string): number {
   return Math.round(parseFloat(dollars) * 100);
 }
 
+// Normalize Kalshi order response (API returns _dollars/_fp suffixed fields)
+function normalizeOrder(raw: Record<string, unknown>): KalshiOrder {
+  return {
+    order_id: (raw.order_id as string) || '',
+    ticker: (raw.ticker as string) || '',
+    status: (raw.status as KalshiOrder['status']) || 'pending',
+    side: (raw.side as 'yes' | 'no') || 'yes',
+    action: (raw.action as 'buy' | 'sell') || 'buy',
+    type: 'limit',
+    yes_price: raw.yes_price != null
+      ? Number(raw.yes_price)
+      : raw.yes_price_dollars != null
+        ? dollarsToCents(String(raw.yes_price_dollars))
+        : 0,
+    no_price: raw.no_price != null
+      ? Number(raw.no_price)
+      : raw.no_price_dollars != null
+        ? dollarsToCents(String(raw.no_price_dollars))
+        : 0,
+    count: raw.count != null
+      ? Number(raw.count)
+      : raw.initial_count_fp != null
+        ? Math.round(parseFloat(String(raw.initial_count_fp)))
+        : 0,
+    remaining_count: raw.remaining_count != null
+      ? Number(raw.remaining_count)
+      : raw.remaining_count_fp != null
+        ? Math.round(parseFloat(String(raw.remaining_count_fp)))
+        : 0,
+    created_time: (raw.created_time as string) || '',
+  };
+}
+
 function normalizeMarket(raw: KalshiMarketRaw): KalshiMarket {
   return {
     ticker: raw.ticker,
@@ -101,7 +134,8 @@ const writeLimiter = new RateLimiter(8);
 
 // --- HTTP layer ---
 
-const PUBLIC_BASE_URL = 'https://api.elections.kalshi.com/trade-api/v2';
+// Use the same base URL for public and authed requests (demo or prod)
+const PUBLIC_BASE_URL = config.kalshi.baseUrl;
 
 async function publicRequest<T>(path: string): Promise<T> {
   await readLimiter.acquire();
@@ -236,7 +270,7 @@ export async function getFills(params?: {
 
 export async function createOrder(params: CreateOrderParams): Promise<KalshiOrder> {
   const data = await withRetryWrapper(
-    () => authedRequest<KalshiOrderResponse>('POST', '/portfolio/orders', {
+    () => authedRequest<Record<string, unknown>>('POST', '/portfolio/orders', {
       ticker: params.ticker,
       action: params.action,
       side: params.side,
@@ -246,7 +280,7 @@ export async function createOrder(params: CreateOrderParams): Promise<KalshiOrde
     }),
     'POST /portfolio/orders',
   );
-  return data.order;
+  return normalizeOrder(data.order as Record<string, unknown>);
 }
 
 export async function cancelOrder(orderId: string): Promise<void> {
@@ -258,8 +292,8 @@ export async function cancelOrder(orderId: string): Promise<void> {
 
 export async function getOrder(orderId: string): Promise<KalshiOrder> {
   const data = await withRetryWrapper(
-    () => authedRequest<KalshiOrderResponse>('GET', `/portfolio/orders/${orderId}`),
+    () => authedRequest<Record<string, unknown>>('GET', `/portfolio/orders/${orderId}`),
     `GET /portfolio/orders/${orderId}`,
   );
-  return data.order;
+  return normalizeOrder(data.order as Record<string, unknown>);
 }

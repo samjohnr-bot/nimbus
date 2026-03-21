@@ -230,7 +230,7 @@ async function refresh() {
         '<td class="edge">' + (t.edge != null ? fmtPct(t.edge) : '—') + '</td>' +
         '<td>' + (t.price || '—') + 'c</td>' +
         '<td>' + (t.contracts || '—') + '</td>' +
-        '<td>' + (t.dryRun ? 'dry' : (t.status || '—')) + '</td>' +
+        '<td title="' + (t.error || '') + '">' + (t.dryRun ? 'dry' : (t.status || '—')) + '</td>' +
       '</tr>';
     });
     html += '</table>';

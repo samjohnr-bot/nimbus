@@ -58,6 +58,7 @@ export function logTrade(cycleId: string, result: TradeResult): void {
     status: result.status,
     fee: result.signal.fee,
     dryRun: config.dryRun,
+    error: result.error || undefined,
   });
 }
 

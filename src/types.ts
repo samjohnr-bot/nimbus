@@ -44,6 +44,7 @@ export interface TradeResult {
   filledContracts: number;
   filledPrice: number;
   timestamp: Date;
+  error?: string;
 }
 
 export interface CycleSummary {

@@ -129,7 +129,8 @@ async function attemptOrder(
       timestamp: new Date(),
     };
   } catch (error) {
-    log.error({ error: String(error), ticker: signal.bracket.ticker, side: signal.side, price }, 'Order failed');
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    log.error({ error: errorMsg, ticker: signal.bracket.ticker, side: signal.side, price }, 'Order failed');
     return {
       signal,
       orderId: '',
@@ -137,6 +138,7 @@ async function attemptOrder(
       filledContracts: 0,
       filledPrice: 0,
       timestamp: new Date(),
+      error: errorMsg,
     };
   }
 }
