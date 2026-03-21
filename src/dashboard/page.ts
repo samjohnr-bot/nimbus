@@ -275,7 +275,7 @@ async function refresh() {
       '<td></td></tr>';
 
     html += '</table>';
-    html += '<div style="font-size:11px;color:#505070;margin-top:8px">Settles after tomorrow\'s high temp is recorded (~7 AM CT day after)</div>';
+    html += '<div style="font-size:11px;color:#505070;margin-top:8px">Settles after tomorrow\\\'s high temp is recorded (~7 AM CT day after)</div>';
     document.getElementById('positions-table').innerHTML = html;
   } else {
     document.getElementById('positions-table').innerHTML = '<div class="empty">No open positions</div>';
