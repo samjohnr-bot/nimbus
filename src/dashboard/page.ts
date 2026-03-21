@@ -80,7 +80,7 @@ export function getDashboardHtml(): string {
       <div class="stat-label">Daily P&L</div>
     </div>
     <div class="stat">
-      <div class="stat-value" id="positions">—</div>
+      <div class="stat-value" id="position-count">—</div>
       <div class="stat-label">Positions</div>
     </div>
     <div class="stat">
@@ -112,7 +112,7 @@ export function getDashboardHtml(): string {
       </div>
       <div class="card" style="margin-bottom: 20px;">
         <h2>Open Positions</h2>
-        <div id="positions"></div>
+        <div id="positions-table"></div>
       </div>
       <div class="card">
         <h2>Trade History</h2>
@@ -161,7 +161,7 @@ async function refresh() {
     const pnlEl = document.getElementById('daily-pnl');
     pnlEl.textContent = fmt$(status.dailyPnl);
     pnlEl.className = 'stat-value ' + (status.dailyPnl >= 0 ? 'stat-pos' : 'stat-neg');
-    document.getElementById('positions').textContent = status.positions;
+    document.getElementById('position-count').textContent = status.positions;
     document.getElementById('last-cycle').textContent = timeAgo(status.lastCycleTime);
   }
 
@@ -240,9 +240,9 @@ async function refresh() {
       '</tr>';
     });
     html += '</table>';
-    document.getElementById('positions').innerHTML = html;
+    document.getElementById('positions-table').innerHTML = html;
   } else {
-    document.getElementById('positions').innerHTML = '<div class="empty">No open positions</div>';
+    document.getElementById('positions-table').innerHTML = '<div class="empty">No open positions</div>';
   }
 
   // Trades table
