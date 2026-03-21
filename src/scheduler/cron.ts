@@ -10,6 +10,7 @@ import { getState as getPortfolioState } from '../trading/portfolio.js';
 import { logCycle, logTrade, logPrediction } from '../analytics/tracker.js';
 import { checkSettlements } from '../analytics/settlement.js';
 import { setLatestCycleData } from '../dashboard/api.js';
+import { recordPaperTrades, checkPaperSettlements, getPaperState } from '../paper/portfolio.js';
 
 const log = createLogger('scheduler');
 
@@ -63,18 +64,26 @@ export async function runTradingCycle(): Promise<void> {
       logTrade(cycleId, result);
     }
 
+    // 5b. Track paper trades if in paper mode
+    if (config.paperTrade) {
+      recordPaperTrades(results);
+    }
+
     const filled = results.filter(r => r.status === 'filled').length;
+
+    // Use paper state for balance/positions if in paper mode
+    const paperState = config.paperTrade ? getPaperState() : null;
 
     logCycle({
       cycleId,
       timestamp: new Date(),
       date: getTomorrowDateString(),
-      balance: portfolio.balance,
-      positions: portfolio.positions.size,
+      balance: paperState ? paperState.balance : portfolio.balance,
+      positions: paperState ? paperState.positions : portfolio.positions.size,
       signalsGenerated: signals.length,
       tradesAttempted: results.length,
       tradesFilled: filled,
-      dailyPnl: getRiskState().dailyPnl,
+      dailyPnl: paperState ? paperState.dailyPnl : getRiskState().dailyPnl,
     });
 
     log.info(
@@ -83,7 +92,8 @@ export async function runTradingCycle(): Promise<void> {
         signals: signals.length,
         traded: results.length,
         filled,
-        balance: portfolio.balance,
+        balance: paperState ? paperState.balance : portfolio.balance,
+        paperPnl: paperState?.totalPnl,
       },
       'Trading cycle complete',
     );
@@ -103,7 +113,11 @@ export function startScheduler(): { stop: () => void } {
   const settlementJob = new Cron('0 7 * * *', { timezone }, async () => {
     log.info('Running settlement check');
     try {
-      await checkSettlements();
+      if (config.paperTrade) {
+        await checkPaperSettlements();
+      } else {
+        await checkSettlements();
+      }
     } catch (error) {
       log.error({ error: String(error) }, 'Settlement check failed');
     }

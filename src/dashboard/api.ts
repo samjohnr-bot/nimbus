@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { getState as getPortfolioState } from '../trading/portfolio.js';
 import { getRiskState } from '../strategy/risk.js';
 import { getAuthDiagnostics } from '../kalshi/auth.js';
+import { getPaperState } from '../paper/portfolio.js';
 import type { TradeSignal, BracketProbability } from '../types.js';
 
 // In-memory state set by the scheduler after each cycle
@@ -72,17 +73,21 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
   if (url === '/api/status') {
     const portfolio = getPortfolioState();
     const risk = getRiskState();
+    const paper = config.paperTrade ? getPaperState() : null;
     json(res, {
       env: config.env,
       dryRun: config.dryRun,
       paperTrade: config.paperTrade,
       startedAt,
       uptime: process.uptime(),
-      balance: config.paperTrade ? (config.paperBankroll || 15000) : portfolio.balance,
-      portfolioValue: portfolio.portfolioValue,
-      positions: portfolio.positions.size,
-      totalExposure: portfolio.totalExposure,
-      dailyPnl: risk.dailyPnl,
+      balance: paper ? paper.balance : portfolio.balance,
+      portfolioValue: paper ? paper.totalPnl : portfolio.portfolioValue,
+      positions: paper ? paper.positions : portfolio.positions.size,
+      totalExposure: paper ? 0 : portfolio.totalExposure,
+      dailyPnl: paper ? paper.dailyPnl : risk.dailyPnl,
+      paperWins: paper?.wins,
+      paperLosses: paper?.losses,
+      paperTrades: paper?.trades,
       lastCycleTime,
       lastCycleId,
       city: config.trading.city,
