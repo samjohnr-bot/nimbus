@@ -14,7 +14,7 @@ const envSchema = z.object({
   NIMBUS_MAX_DAILY_LOSS: z.coerce.number().int().positive().default(15000),
   NIMBUS_KELLY_FRACTION: z.coerce.number().min(0).max(1).default(0.15),
   NIMBUS_POLL_INTERVAL: z.coerce.number().int().min(1).default(10),
-  NIMBUS_MAX_SPREAD: z.coerce.number().int().positive().default(8),
+  NIMBUS_MAX_SPREAD: z.coerce.number().int().positive().default(80),
   NIMBUS_DATA_MAX_AGE: z.coerce.number().int().positive().default(7200),
   NIMBUS_MIN_TIME_BEFORE_CLOSE: z.coerce.number().int().positive().default(3600),
   NIMBUS_RUN_ON_START: z.string().transform(v => v === 'true').default('false'),
