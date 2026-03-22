@@ -102,13 +102,26 @@ export async function runTradingCycle(): Promise<void> {
       }
     }
 
-    // 5. Apply portfolio-level risk filter
-    const approvedSignals = filterPortfolioRisk(allSignals, balance);
+    // 5. Filter out tickers we already hold in paper mode (prevent duplicate buying)
+    let filteredSignals = allSignals;
+    if (config.paperTrade) {
+      const { hasPaperPosition } = await import('../paper/portfolio.js');
+      filteredSignals = allSignals.filter(s => !hasPaperPosition(s.bracket.ticker));
+      if (filteredSignals.length < allSignals.length) {
+        log.info(
+          { before: allSignals.length, after: filteredSignals.length },
+          'Filtered out signals for tickers already held',
+        );
+      }
+    }
+
+    // 6. Apply portfolio-level risk filter
+    const approvedSignals = filterPortfolioRisk(filteredSignals, balance);
 
     // Store for dashboard API (all approved signals + all distributions)
     setLatestCycleData(approvedSignals, allDistributions, cycleId, allRawSignals);
 
-    // 6. Execute approved signals
+    // 7. Execute approved signals
     const results = await executeSignals(approvedSignals);
 
     // 7. Log results
@@ -162,8 +175,8 @@ export function startScheduler(): { stop: () => void } {
   const pollCron = `*/${pollIntervalMinutes} ${config.scheduler.activeHoursStart}-${config.scheduler.activeHoursEnd - 1} * * *`;
   const pollJob = new Cron(pollCron, { timezone }, runTradingCycle);
 
-  // Settlement check: 7 AM Chicago time
-  const settlementJob = new Cron('0 7 * * *', { timezone }, async () => {
+  // Settlement check: every 2 hours during the day (settlements can be delayed)
+  const settlementJob = new Cron('0 7,9,11,13,15,17 * * *', { timezone }, async () => {
     log.info('Running settlement check');
     try {
       if (config.paperTrade) {

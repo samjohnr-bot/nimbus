@@ -69,7 +69,7 @@ function load() {
 
 // Load on startup — force reset to clear bad data from partial fill bug
 // TODO: Remove this force-reset after first deploy
-const FORCE_RESET_VERSION = 1;
+const FORCE_RESET_VERSION = 2; // bump to clear duplicate-buy positions
 load();
 if ((state as unknown as Record<string, unknown>).resetVersion !== FORCE_RESET_VERSION) {
   state = {
