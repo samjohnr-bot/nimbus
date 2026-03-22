@@ -87,8 +87,9 @@ function loadConfig() {
     },
 
     portfolio: {
-      maxExposurePerCity: 0.15,    // no more than 15% of bankroll in any one city
-      maxContractsPerStrike: 300,  // avoid moving the market
+      maxExposurePerCity: 0.10,    // no more than 10% of bankroll in any one city
+      maxContractsPerStrike: 25,   // realistic for thin weather markets (typically 10-50 depth)
+      maxTotalDeployed: 0.50,      // never deploy more than 50% of starting bankroll
     },
 
     logging: {

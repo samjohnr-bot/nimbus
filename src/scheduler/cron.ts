@@ -115,8 +115,12 @@ export async function runTradingCycle(): Promise<void> {
       }
     }
 
-    // 6. Apply portfolio-level risk filter
-    const approvedSignals = filterPortfolioRisk(filteredSignals, balance);
+    // 6. Apply portfolio-level risk filter (pass existing exposure + starting bankroll)
+    const existingExposure = paperState
+      ? paperState.positionDetails.reduce((sum: number, p: { totalCost: number }) => sum + p.totalCost, 0)
+      : 0;
+    const startingBankroll = paperState ? paperState.startingBalance : balance;
+    const approvedSignals = filterPortfolioRisk(filteredSignals, balance, existingExposure, startingBankroll);
 
     // Store for dashboard API (all approved signals + all distributions)
     setLatestCycleData(approvedSignals, allDistributions, cycleId, allRawSignals);

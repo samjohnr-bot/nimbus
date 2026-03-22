@@ -46,7 +46,7 @@ export function checkTradeAllowed(
   signal: TradeSignal,
   balance: number,
 ): { allowed: boolean; reason?: string } {
-  const { maxDailyLoss, edgeThreshold, maxSpread, maxTradeSize } = config.trading;
+  const { maxDailyLoss, edgeThreshold, maxSpread } = config.trading;
 
   // Daily loss limit
   if (state.dailyPnl <= -maxDailyLoss) {
@@ -63,48 +63,49 @@ export function checkTradeAllowed(
     return { allowed: false, reason: `spread_too_wide: ${signal.spread} > ${maxSpread}` };
   }
 
-  // Per-trade size cap
-  if (signal.maxCost > maxTradeSize) {
-    return { allowed: false, reason: `trade_too_large: ${signal.maxCost} > ${maxTradeSize}` };
-  }
-
-  // Balance check
-  if (signal.maxCost > balance * 0.3) {
-    return { allowed: false, reason: 'insufficient_balance' };
-  }
-
-  // Total exposure check: no more than 60% of balance deployed
-  if (state.totalExposure + signal.maxCost > balance * 0.6) {
-    return { allowed: false, reason: 'exposure_limit' };
-  }
-
   return { allowed: true };
 }
 
+/**
+ * Filter signals through portfolio-level risk constraints.
+ * @param existingExposure - total cost of positions already held (from paper portfolio or real)
+ * @param startingBankroll - the original bankroll (not current balance) for total deployment cap
+ */
 export function filterPortfolioRisk(
   allSignals: TradeSignal[],
   balance: number,
+  existingExposure: number = 0,
+  startingBankroll: number = balance,
 ): TradeSignal[] {
   // Sort by edge descending — prioritize highest-edge signals
   const sorted = [...allSignals].sort((a, b) => b.edge - a.edge);
 
   const exposureByCity = new Map<string, number>();
-  let totalExposure = 0;
+  // Start with existing exposure from held positions
+  let totalExposure = existingExposure;
   const approved: TradeSignal[] = [];
+
+  // Hard cap: never deploy more than X% of STARTING bankroll total
+  const maxTotalDeployed = startingBankroll * config.portfolio.maxTotalDeployed;
 
   for (const signal of sorted) {
     const cityExposure = exposureByCity.get(signal.cityId) ?? 0;
 
-    // Clamp contracts to maxContractsPerStrike if over
-    let contracts = signal.contracts;
-    let maxCost = signal.maxCost;
-    if (contracts > config.portfolio.maxContractsPerStrike) {
-      contracts = config.portfolio.maxContractsPerStrike;
-      maxCost = contracts * signal.price + signal.fee;
+    // Clamp contracts to maxContractsPerStrike
+    let contracts = Math.min(signal.contracts, config.portfolio.maxContractsPerStrike);
+    const fee = Math.ceil(0.07 * (signal.price / 100) * (1 - signal.price / 100) * contracts * 100);
+    let maxCost = contracts * signal.price + fee;
+
+    // Per-trade cap: no more than 10% of current balance
+    if (maxCost > balance * 0.10) {
+      contracts = Math.floor((balance * 0.10) / signal.price);
+      if (contracts < 1) continue;
+      const newFee = Math.ceil(0.07 * (signal.price / 100) * (1 - signal.price / 100) * contracts * 100);
+      maxCost = contracts * signal.price + newFee;
     }
 
     // Per-city exposure limit
-    if (cityExposure + maxCost > balance * config.portfolio.maxExposurePerCity) {
+    if (cityExposure + maxCost > startingBankroll * config.portfolio.maxExposurePerCity) {
       log.debug(
         { ticker: signal.bracket.ticker, cityId: signal.cityId, cityExposure, maxCost },
         'Signal rejected: city exposure limit',
@@ -112,23 +113,35 @@ export function filterPortfolioRisk(
       continue;
     }
 
-    // Total portfolio exposure limit (60% of balance)
-    if (totalExposure + maxCost > balance * 0.6) {
+    // Total deployment cap against starting bankroll
+    if (totalExposure + maxCost > maxTotalDeployed) {
       log.debug(
-        { ticker: signal.bracket.ticker, totalExposure, maxCost },
-        'Signal rejected: total exposure limit',
+        { ticker: signal.bracket.ticker, totalExposure, maxCost, maxTotalDeployed },
+        'Signal rejected: total deployment cap',
       );
+      continue;
+    }
+
+    // Balance check — can we actually afford this?
+    if (maxCost > balance) {
       continue;
     }
 
     // Approved — update running totals
     exposureByCity.set(signal.cityId, cityExposure + maxCost);
     totalExposure += maxCost;
-    approved.push({ ...signal, contracts, maxCost });
+    approved.push({ ...signal, contracts, maxCost, fee });
   }
 
   log.info(
-    { total: allSignals.length, approved: approved.length, totalExposure },
+    {
+      total: allSignals.length,
+      approved: approved.length,
+      existingExposure,
+      newExposure: totalExposure - existingExposure,
+      totalExposure,
+      maxAllowed: maxTotalDeployed,
+    },
     'Portfolio risk filter applied',
   );
 

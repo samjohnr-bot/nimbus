@@ -205,12 +205,14 @@ export async function getMarkets(params: {
   status?: string;
   cursor?: string;
   limit?: number;
+  min_close_ts?: string;
 }): Promise<KalshiMarket[]> {
   const query = new URLSearchParams();
   if (params.series_ticker) query.set('series_ticker', params.series_ticker);
   if (params.status) query.set('status', params.status);
   if (params.cursor) query.set('cursor', params.cursor);
   if (params.limit) query.set('limit', params.limit.toString());
+  if (params.min_close_ts) query.set('min_close_ts', params.min_close_ts);
 
   const qs = query.toString();
   const path = `/markets${qs ? `?${qs}` : ''}`;

@@ -318,7 +318,7 @@ async function refresh() {
     });
     html += '<tr style="border-top:2px solid #2a2a4e;font-weight:600"><td>Total at risk</td><td>' + fmt$(totalCost) + '</td></tr>';
     html += '</table>';
-    html += '<div style="font-size:11px;color:#505070;margin-top:8px">Settles after tomorrow\\\'s high temp is recorded (~7 AM CT day after)</div>';
+    html += '<div style="font-size:11px;color:#505070;margin-top:8px">Settles after high/low temp is recorded (~7 AM CT day after)</div>';
     document.getElementById('positions-table').innerHTML = html;
   } else {
     document.getElementById('positions-table').innerHTML = '<div class="empty">No open positions</div>';

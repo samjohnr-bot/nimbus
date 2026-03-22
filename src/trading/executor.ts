@@ -30,22 +30,39 @@ async function attemptOrder(
   price: number,
 ): Promise<TradeResult | null> {
   if (config.dryRun) {
+    // Simulate realistic order book depth for paper trading
+    // Weather markets typically have 10-30 contracts at any price level
+    const maxRealisticFill = Math.min(signal.contracts, 15 + Math.floor(Math.random() * 16)); // 15-30
+    const filledContracts = Math.min(signal.contracts, maxRealisticFill);
+
+    if (filledContracts < 1) {
+      return {
+        signal,
+        orderId: 'dry-run',
+        status: 'cancelled',
+        filledContracts: 0,
+        filledPrice: price,
+        timestamp: new Date(),
+      };
+    }
+
     log.info(
       {
         ticker: signal.bracket.ticker,
         side: signal.side,
         price,
-        contracts: signal.contracts,
+        requestedContracts: signal.contracts,
+        filledContracts,
         edge: signal.edge.toFixed(3),
         dryRun: true,
       },
-      'DRY RUN — would place order',
+      'DRY RUN — simulated partial fill',
     );
     return {
       signal,
       orderId: 'dry-run',
       status: 'filled',
-      filledContracts: signal.contracts,
+      filledContracts,
       filledPrice: price,
       timestamp: new Date(),
     };

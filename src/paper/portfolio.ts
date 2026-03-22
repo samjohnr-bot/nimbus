@@ -69,7 +69,7 @@ function load() {
 
 // Load on startup — force reset to clear bad data from partial fill bug
 // TODO: Remove this force-reset after first deploy
-const FORCE_RESET_VERSION = 2; // bump to clear duplicate-buy positions
+const FORCE_RESET_VERSION = 3; // bump to clear over-deployed positions
 load();
 if ((state as unknown as Record<string, unknown>).resetVersion !== FORCE_RESET_VERSION) {
   state = {
@@ -265,18 +265,35 @@ export async function checkPaperSettlements(): Promise<void> {
     if (city.low) allSeriesTickers.add(city.low);
   }
 
+  // Build set of tickers we actually hold for efficient matching
+  const heldTickers = new Set(state.positions.map(p => p.ticker));
+  log.info({ heldTickers: [...heldTickers] }, 'Checking settlement for held positions');
+
   const settledTickers = new Map<string, 'yes' | 'no'>();
 
-  for (const seriesTicker of allSeriesTickers) {
+  // Only query series that we actually have positions in
+  const relevantSeries = new Set<string>();
+  for (const ticker of heldTickers) {
+    for (const city of CITIES) {
+      if (city.high && ticker.startsWith(city.high)) relevantSeries.add(city.high);
+      if (city.low && ticker.startsWith(city.low)) relevantSeries.add(city.low);
+    }
+  }
+
+  for (const seriesTicker of relevantSeries) {
     try {
+      // Filter by close time: only look at markets from the last 7 days
+      const weekAgo = Math.floor((Date.now() - 7 * 24 * 3600 * 1000) / 1000);
       const markets = await kalshi.getMarkets({
         series_ticker: seriesTicker,
         status: 'settled',
-        limit: 50,
+        limit: 200,
+        min_close_ts: weekAgo.toString(),
       });
 
       for (const m of markets) {
-        if (m.result === 'yes' || m.result === 'no') {
+        // Only track markets we actually hold positions in
+        if (heldTickers.has(m.ticker) && (m.result === 'yes' || m.result === 'no')) {
           settledTickers.set(m.ticker, m.result as 'yes' | 'no');
         }
       }
