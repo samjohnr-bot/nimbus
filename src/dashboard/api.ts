@@ -81,13 +81,17 @@ export function handleApiRequest(req: IncomingMessage, res: ServerResponse): boo
       startedAt,
       uptime: process.uptime(),
       balance: paper ? paper.balance : portfolio.balance,
-      portfolioValue: paper ? paper.totalPnl : portfolio.portfolioValue,
+      deployed: paper ? paper.startingBalance - paper.balance - paper.settledPnl : portfolio.totalExposure,
+      realizedPnl: paper ? paper.settledPnl : portfolio.portfolioValue,
       positions: paper ? paper.positions : portfolio.positions.size,
       totalExposure: paper ? 0 : portfolio.totalExposure,
       dailyPnl: paper ? paper.dailyPnl : risk.dailyPnl,
       paperWins: paper?.wins,
       paperLosses: paper?.losses,
       paperTrades: paper?.trades,
+      winRate: paper && (paper.wins + paper.losses) > 0
+        ? Math.round(100 * paper.wins / (paper.wins + paper.losses))
+        : null,
       lastCycleTime,
       lastCycleId,
       cities: CITIES.length,

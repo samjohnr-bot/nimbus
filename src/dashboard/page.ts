@@ -73,19 +73,23 @@ export function getDashboardHtml(): string {
     <div class="spacer"></div>
     <div class="stat">
       <div class="stat-value" id="balance">—</div>
-      <div class="stat-label">Balance</div>
+      <div class="stat-label">Cash</div>
     </div>
     <div class="stat">
-      <div class="stat-value" id="daily-pnl">—</div>
-      <div class="stat-label">Daily P&L</div>
+      <div class="stat-value" id="deployed">—</div>
+      <div class="stat-label">Deployed</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="realized-pnl">—</div>
+      <div class="stat-label">Realized P&L</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value" id="win-rate">—</div>
+      <div class="stat-label">Win Rate</div>
     </div>
     <div class="stat">
       <div class="stat-value" id="position-count">—</div>
       <div class="stat-label">Positions</div>
-    </div>
-    <div class="stat">
-      <div class="stat-value" id="city-count">—</div>
-      <div class="stat-label">Cities</div>
     </div>
     <div class="stat">
       <div class="stat-value" id="last-cycle">—</div>
@@ -163,12 +167,19 @@ async function refresh() {
     else { modeEl.textContent = 'LIVE'; modeEl.className = 'badge badge-live'; }
 
     document.getElementById('balance').textContent = fmt$(status.balance);
-    const pnlEl = document.getElementById('daily-pnl');
-    pnlEl.textContent = fmt$(status.dailyPnl);
-    pnlEl.className = 'stat-value ' + (status.dailyPnl >= 0 ? 'stat-pos' : 'stat-neg');
+    document.getElementById('deployed').textContent = fmt$(status.deployed || 0);
+    const pnlEl = document.getElementById('realized-pnl');
+    pnlEl.textContent = (status.realizedPnl >= 0 ? '+' : '') + fmt$(status.realizedPnl || 0);
+    pnlEl.className = 'stat-value ' + (status.realizedPnl >= 0 ? 'stat-pos' : 'stat-neg');
+    const wrEl = document.getElementById('win-rate');
+    if (status.winRate != null) {
+      wrEl.textContent = status.winRate + '%';
+      wrEl.className = 'stat-value ' + (status.winRate >= 50 ? 'stat-pos' : 'stat-neg');
+    } else {
+      wrEl.textContent = '—';
+    }
     document.getElementById('position-count').textContent = status.positions;
     document.getElementById('last-cycle').textContent = timeAgo(status.lastCycleTime);
-    document.getElementById('city-count').textContent = status.cities || '—';
   }
 
   // Distribution
