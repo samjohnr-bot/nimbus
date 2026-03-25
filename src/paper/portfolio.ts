@@ -69,7 +69,7 @@ function load() {
 
 // Load on startup — force reset to clear bad data from partial fill bug
 // TODO: Remove this force-reset after first deploy
-const FORCE_RESET_VERSION = 3; // bump to clear over-deployed positions
+const FORCE_RESET_VERSION = 4; // bump to clear positions from off-by-one date bug
 load();
 if ((state as unknown as Record<string, unknown>).resetVersion !== FORCE_RESET_VERSION) {
   state = {

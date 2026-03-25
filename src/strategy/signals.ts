@@ -35,14 +35,46 @@ export interface SignalResult {
 
 const log = createLogger('signals');
 
-function getTomorrowDate(): string {
-  const tomorrow = new Date();
+/**
+ * Parse event date from a Kalshi event ticker like "KXHIGHCHI-26MAR25" → "2026-03-25"
+ */
+function parseEventDate(eventTicker: string): string | null {
+  // Match pattern like 26MAR25, 26APR01, etc.
+  const match = eventTicker.match(/(\d{2})([A-Z]{3})(\d{2})$/);
+  if (!match) return null;
+  const [, century_and_year_prefix, monthStr, day] = match;
+  const months: Record<string, string> = {
+    JAN: '01', FEB: '02', MAR: '03', APR: '04', MAY: '05', JUN: '06',
+    JUL: '07', AUG: '08', SEP: '09', OCT: '10', NOV: '11', DEC: '12',
+  };
+  const month = months[monthStr];
+  if (!month) return null;
+  // "26MAR25" → year prefix "26" = 2026, day "25"
+  return `20${century_and_year_prefix}-${month}-${day}`;
+}
+
+/**
+ * Get tomorrow's date in US Central Time (CT).
+ * Kalshi weather markets are based on CT event dates.
+ */
+function getTomorrowDateCT(): string {
+  const now = new Date();
+  // Convert to CT by using Intl formatter
+  const ctFormatter = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Chicago',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  });
+  // Get today in CT, then add 1 day
+  const todayCT = ctFormatter.format(now); // "YYYY-MM-DD" format from en-CA locale
+  const tomorrow = new Date(todayCT + 'T12:00:00'); // noon to avoid DST edge cases
   tomorrow.setDate(tomorrow.getDate() + 1);
   return tomorrow.toISOString().split('T')[0];
 }
 
 export async function generateSignals(balance: number, request?: SignalRequest): Promise<SignalResult> {
-  const targetDate = getTomorrowDate();
+  const targetDateCT = getTomorrowDateCT();
 
   // Resolve city-specific values: use request if provided, otherwise fall back to config
   const seriesTicker = request?.seriesTicker ?? config.trading.seriesTicker;
@@ -54,9 +86,9 @@ export async function generateSignals(balance: number, request?: SignalRequest):
   // In paper/dry-run mode with $0 balance, use a simulated bankroll so sizing works
   if (balance === 0 && (config.dryRun || config.paperTrade)) {
     balance = config.paperBankroll || 15000; // simulated bankroll (in cents)
-    log.info({ targetDate, balance, simulated: true, paper: config.paperTrade, cityId }, 'Generating signals (simulated bankroll)');
+    log.info({ targetDateCT, balance, simulated: true, paper: config.paperTrade, cityId }, 'Generating signals (simulated bankroll)');
   } else {
-    log.info({ targetDate, balance, cityId }, 'Generating signals');
+    log.info({ targetDateCT, balance, cityId }, 'Generating signals');
   }
 
   // 1. Fetch bracket markets from Kalshi
@@ -65,26 +97,27 @@ export async function generateSignals(balance: number, request?: SignalRequest):
     status: 'open',
   });
 
-  // Filter to tomorrow's markets by matching the event ticker date
-  // Event tickers look like KXHIGHCHI-26MAR20 for March 20, 2026
+  // Filter to tomorrow's markets by matching the EVENT DATE from the event_ticker
+  // Event tickers like "KXHIGHCHI-26MAR25" → event date "2026-03-25"
+  // CRITICAL: Do NOT use close_time (which is day AFTER event) — that caused an
+  // off-by-one where we forecast Day X+1 weather but bet on Day X markets.
   const tomorrowMarkets = markets.filter(m => {
-    const closeDate = new Date(m.closeTime).toISOString().split('T')[0];
-    const expDate = new Date(m.expirationTime).toISOString().split('T')[0];
-    return closeDate === targetDate || expDate === targetDate;
+    const eventDate = parseEventDate(m.eventTicker);
+    return eventDate === targetDateCT;
   });
 
   if (tomorrowMarkets.length === 0) {
-    log.info({ targetDate }, 'No markets found for tomorrow');
+    log.info({ targetDateCT, seriesTicker, totalMarkets: markets.length }, 'No markets found for tomorrow');
     return { signals: [], distribution: [], rawSignals: [] };
   }
 
-  log.info({ count: tomorrowMarkets.length, targetDate }, 'Found bracket markets');
+  log.info({ count: tomorrowMarkets.length, targetDateCT, eventTicker: tomorrowMarkets[0].eventTicker }, 'Found bracket markets');
 
   // 2. Parse brackets from market data
   const brackets = parseBracketsFromMarkets(tomorrowMarkets);
 
-  // 3. Fetch ensemble forecast
-  const forecast = await getEnsembleForecast(targetDate, weatherOpts);
+  // 3. Fetch ensemble forecast — use the SAME date as the market event
+  const forecast = await getEnsembleForecast(targetDateCT, weatherOpts);
 
   // Check data freshness
   const dataAge = (Date.now() - forecast.modelTimestamp.getTime()) / 1000;
@@ -129,7 +162,7 @@ export async function generateSignals(balance: number, request?: SignalRequest):
     {
       raw: rawSignals.length,
       approved: tradeSignals.length,
-      targetDate,
+      targetDateCT,
     },
     'Signal generation complete',
   );
