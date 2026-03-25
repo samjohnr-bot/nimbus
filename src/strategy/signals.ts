@@ -74,8 +74,6 @@ function getTomorrowDateCT(): string {
 }
 
 export async function generateSignals(balance: number, request?: SignalRequest): Promise<SignalResult> {
-  const targetDateCT = getTomorrowDateCT();
-
   // Resolve city-specific values: use request if provided, otherwise fall back to config
   const seriesTicker = request?.seriesTicker ?? config.trading.seriesTicker;
   const cityId = request?.cityId ?? config.trading.city;
@@ -86,38 +84,43 @@ export async function generateSignals(balance: number, request?: SignalRequest):
   // In paper/dry-run mode with $0 balance, use a simulated bankroll so sizing works
   if (balance === 0 && (config.dryRun || config.paperTrade)) {
     balance = config.paperBankroll || 15000; // simulated bankroll (in cents)
-    log.info({ targetDateCT, balance, simulated: true, paper: config.paperTrade, cityId }, 'Generating signals (simulated bankroll)');
-  } else {
-    log.info({ targetDateCT, balance, cityId }, 'Generating signals');
   }
 
-  // 1. Fetch bracket markets from Kalshi
+  // 1. Fetch all open bracket markets from Kalshi
   const markets = await kalshi.getMarkets({
     series_ticker: seriesTicker,
     status: 'open',
   });
 
-  // Filter to tomorrow's markets by matching the EVENT DATE from the event_ticker
-  // Event tickers like "KXHIGHCHI-26MAR25" → event date "2026-03-25"
-  // CRITICAL: Do NOT use close_time (which is day AFTER event) — that caused an
-  // off-by-one where we forecast Day X+1 weather but bet on Day X markets.
-  const tomorrowMarkets = markets.filter(m => {
+  // 2. Group by event date and pick the NEAREST future event
+  // This handles timing: before 8 AM CT, today's markets are still open.
+  // After 8 AM CT, tomorrow's markets are also open. We always trade the
+  // nearest event that hasn't happened yet.
+  const byEventDate = new Map<string, typeof markets>();
+  for (const m of markets) {
     const eventDate = parseEventDate(m.eventTicker);
-    return eventDate === targetDateCT;
-  });
+    if (!eventDate) continue;
+    if (!byEventDate.has(eventDate)) byEventDate.set(eventDate, []);
+    byEventDate.get(eventDate)!.push(m);
+  }
 
-  if (tomorrowMarkets.length === 0) {
-    log.info({ targetDateCT, seriesTicker, totalMarkets: markets.length }, 'No markets found for tomorrow');
+  // Sort event dates and pick the nearest one
+  const sortedDates = [...byEventDate.keys()].sort();
+  if (sortedDates.length === 0) {
+    log.info({ seriesTicker, totalMarkets: markets.length }, 'No parseable event dates in open markets');
     return { signals: [], distribution: [], rawSignals: [] };
   }
 
-  log.info({ count: tomorrowMarkets.length, targetDateCT, eventTicker: tomorrowMarkets[0].eventTicker }, 'Found bracket markets');
+  const targetDate = sortedDates[0]; // nearest event
+  const targetMarkets = byEventDate.get(targetDate)!;
 
-  // 2. Parse brackets from market data
-  const brackets = parseBracketsFromMarkets(tomorrowMarkets);
+  log.info({ targetDate, count: targetMarkets.length, cityId, balance }, 'Generating signals');
 
-  // 3. Fetch ensemble forecast — use the SAME date as the market event
-  const forecast = await getEnsembleForecast(targetDateCT, weatherOpts);
+  // 3. Parse brackets from market data
+  const brackets = parseBracketsFromMarkets(targetMarkets);
+
+  // 4. Fetch ensemble forecast — use the SAME date as the market event
+  const forecast = await getEnsembleForecast(targetDate, weatherOpts);
 
   // Check data freshness
   const dataAge = (Date.now() - forecast.modelTimestamp.getTime()) / 1000;
@@ -162,7 +165,7 @@ export async function generateSignals(balance: number, request?: SignalRequest):
     {
       raw: rawSignals.length,
       approved: tradeSignals.length,
-      targetDateCT,
+      targetDate,
     },
     'Signal generation complete',
   );
