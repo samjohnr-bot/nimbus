@@ -6,7 +6,9 @@ import type { TradeResult } from '../types.js';
 
 const log = createLogger('paper:portfolio');
 
-const DATA_FILE = './data/paper-portfolio.json';
+// Use Railway persistent volume if available, otherwise fallback to local data dir
+const PERSIST_DIR = process.env.RAILWAY_VOLUME_MOUNT_PATH || './data';
+const DATA_FILE = path.join(PERSIST_DIR, 'paper-portfolio.json');
 
 interface PaperPosition {
   ticker: string;
@@ -67,11 +69,14 @@ function load() {
   }
 }
 
-// Load on startup — force reset to clear bad data from partial fill bug
-// TODO: Remove this force-reset after first deploy
-const FORCE_RESET_VERSION = 4; // bump to clear positions from off-by-one date bug
+// Load saved state on startup (persists across deploys via Railway volume)
 load();
-if ((state as unknown as Record<string, unknown>).resetVersion !== FORCE_RESET_VERSION) {
+
+// Force reset if positions were built with the wrong-day forecast bug
+// Remove this block after deploy 2026-03-26
+const REQUIRED_RESET_VERSION = 3;
+if ((state as unknown as Record<string, unknown>)._resetVersion !== REQUIRED_RESET_VERSION) {
+  log.info('Force-resetting paper portfolio: clearing positions from wrong-day forecast bug');
   state = {
     balance: config.paperBankroll || 15000,
     startingBalance: config.paperBankroll || 15000,
@@ -83,7 +88,7 @@ if ((state as unknown as Record<string, unknown>).resetVersion !== FORCE_RESET_V
     wins: 0,
     losses: 0,
   };
-  (state as unknown as Record<string, unknown>).resetVersion = FORCE_RESET_VERSION;
+  (state as unknown as Record<string, unknown>)._resetVersion = REQUIRED_RESET_VERSION;
   save();
 }
 

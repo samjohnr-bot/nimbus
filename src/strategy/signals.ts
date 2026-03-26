@@ -92,26 +92,27 @@ export async function generateSignals(balance: number, request?: SignalRequest):
     status: 'open',
   });
 
-  // 2. Group by event date and pick the NEAREST future event
-  // This handles timing: before 8 AM CT, today's markets are still open.
-  // After 8 AM CT, tomorrow's markets are also open. We always trade the
-  // nearest event that hasn't happened yet.
+  // 2. Group by event date — only target TOMORROW or later
+  // Never trade today's markets: the weather is already observable,
+  // the market has real-time info our forecast model doesn't.
+  const tomorrowCT = getTomorrowDateCT();
   const byEventDate = new Map<string, typeof markets>();
   for (const m of markets) {
     const eventDate = parseEventDate(m.eventTicker);
     if (!eventDate) continue;
+    if (eventDate < tomorrowCT) continue; // Skip today's and past markets
     if (!byEventDate.has(eventDate)) byEventDate.set(eventDate, []);
     byEventDate.get(eventDate)!.push(m);
   }
 
-  // Sort event dates and pick the nearest one
+  // Sort event dates and pick the nearest future one (tomorrow)
   const sortedDates = [...byEventDate.keys()].sort();
   if (sortedDates.length === 0) {
-    log.info({ seriesTicker, totalMarkets: markets.length }, 'No parseable event dates in open markets');
+    log.info({ seriesTicker, totalMarkets: markets.length, tomorrowCT }, 'No future event dates in open markets');
     return { signals: [], distribution: [], rawSignals: [] };
   }
 
-  const targetDate = sortedDates[0]; // nearest event
+  const targetDate = sortedDates[0]; // tomorrow (or nearest future)
   const targetMarkets = byEventDate.get(targetDate)!;
 
   log.info({ targetDate, count: targetMarkets.length, cityId, balance }, 'Generating signals');

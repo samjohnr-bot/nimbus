@@ -26,10 +26,11 @@ function buildUrl(
 async function fetchModel(
   model: string,
   forecastDays: number,
+  targetDate: string,
   opts: { latitude: number; longitude: number; variable: string },
 ): Promise<number[]> {
   const url = buildUrl(model, forecastDays, opts);
-  log.debug({ model, url }, 'Fetching ensemble forecast');
+  log.debug({ model, url, targetDate }, 'Fetching ensemble forecast');
 
   const response = await fetch(url);
   if (!response.ok) {
@@ -38,9 +39,14 @@ async function fetchModel(
 
   const data = (await response.json()) as EnsembleApiResponse;
 
-  // The ensemble API returns one value per member per day.
-  // Keys are like "temperature_2m_max_member01", "temperature_2m_max_member02", etc.
-  // Or it may return them in a flat array under the model-specific key.
+  // Find the correct day index by matching the target date in the time array
+  const timeArray = data.daily.time as string[];
+  let dayIndex = timeArray.indexOf(targetDate);
+  if (dayIndex === -1) {
+    log.warn({ targetDate, availableDates: timeArray, model }, 'Target date not found in forecast, skipping model');
+    return [];
+  }
+
   const members: number[] = [];
   const daily = data.daily;
 
@@ -48,16 +54,13 @@ async function fetchModel(
     if (key === 'time') continue;
     if (!key.startsWith(opts.variable)) continue;
 
-    // values is an array with one entry per forecast day
-    // We want tomorrow (index 1) if forecastDays >= 2
-    const dayIndex = forecastDays >= 2 ? 1 : 0;
     const val = values[dayIndex];
     if (typeof val === 'number' && !isNaN(val)) {
       members.push(val);
     }
   }
 
-  log.info({ model, memberCount: members.length }, 'Ensemble members fetched');
+  log.info({ model, memberCount: members.length, dayIndex, targetDate }, 'Ensemble members fetched');
   return members;
 }
 
@@ -79,7 +82,7 @@ export async function getEnsembleForecast(
 
   for (const model of models) {
     const members = await withRetry(
-      () => fetchModel(model, forecastDays, { latitude: opts.latitude, longitude: opts.longitude, variable }),
+      () => fetchModel(model, forecastDays, targetDate, { latitude: opts.latitude, longitude: opts.longitude, variable }),
       `open-meteo-${model}`,
       { maxRetries: 2 },
     );
